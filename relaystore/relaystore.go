@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/fiatjaf/eventstore"
-	"github.com/nbd-wtf/go-nostr"
 	"github.com/fiatjaf/khatru"
+	"github.com/nbd-wtf/go-nostr"
 )
 
 // RelayStore forwards events to a set of remote nostr relays. It does not persist events locally.
@@ -33,6 +33,8 @@ type RelayStore struct {
 	publishSuccesses    int64
 	publishFailures     int64
 	queryRequests       int64
+	queryInternal       int64
+	queryExternal       int64
 	queryEventsReturned int64
 	queryFailures       int64
 }
@@ -43,6 +45,8 @@ type Stats struct {
 	PublishSuccesses    int64 `json:"publish_successes"`
 	PublishFailures     int64 `json:"publish_failures"`
 	QueryRequests       int64 `json:"query_requests"`
+	QueryInternal       int64 `json:"query_internal_requests"`
+	QueryExternal       int64 `json:"query_external_requests"`
 	QueryEventsReturned int64 `json:"query_events_returned"`
 	QueryFailures       int64 `json:"query_failures"`
 }
@@ -54,6 +58,8 @@ func (r *RelayStore) Stats() Stats {
 		PublishSuccesses:    atomic.LoadInt64(&r.publishSuccesses),
 		PublishFailures:     atomic.LoadInt64(&r.publishFailures),
 		QueryRequests:       atomic.LoadInt64(&r.queryRequests),
+		QueryInternal:       atomic.LoadInt64(&r.queryInternal),
+		QueryExternal:       atomic.LoadInt64(&r.queryExternal),
 		QueryEventsReturned: atomic.LoadInt64(&r.queryEventsReturned),
 		QueryFailures:       atomic.LoadInt64(&r.queryFailures),
 	}
@@ -161,19 +167,29 @@ func (r *RelayStore) ensureRelay(ctx context.Context, url string) (*nostr.Relay,
 
 // QueryEvents returns an empty, closed channel because this store does not persist events.
 func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan *nostr.Event, error) {
+	// count both total and internal/external separately (do this regardless of pool state)
+	atomic.AddInt64(&r.queryRequests, 1)
+	if khatru.IsInternalCall(ctx) {
+		atomic.AddInt64(&r.queryInternal, 1)
+	} else {
+		atomic.AddInt64(&r.queryExternal, 1)
+	}
+
 	// if no pool available, return closed channel
 	if r.pool == nil {
+		if r.Verbose {
+			log.Printf("[relaystore][DEBUG] QueryEvents called but no pool initialized (internal=%v) filter=%+v", khatru.IsInternalCall(ctx), filter)
+		}
 		ch := make(chan *nostr.Event)
 		close(ch)
 		return ch, nil
 	}
 
-	// don't count internal calls (deletion/expiration checks that run QueryEvents internally)
-	if !khatru.IsInternalCall(ctx) {
-		atomic.AddInt64(&r.queryRequests, 1)
+	// use FetchMany which ends when all relays return EOSE
+	if r.Verbose {
+		log.Printf("[relaystore][DEBUG] QueryEvents called (internal=%v) filter=%+v", khatru.IsInternalCall(ctx), filter)
 	}
 
-	// use FetchMany which ends when all relays return EOSE
 	// before subscribing, try ensuring relays to detect quick failures and count them
 	for _, q := range r.queryUrls {
 		if q == "" {
