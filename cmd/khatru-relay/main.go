@@ -109,7 +109,28 @@ func main() {
 	if r.Info.Version == "" {
 		r.Info.Version = "0.1.0"
 	}
-	ensureSupportedNip11(r)
+	// ensure SupportedNIPs contains 11 and 45 (we add 45 in case a store/feature needs it)
+	ensureSupportedNips(r, []int{11, 45})
+
+	// populate other NIP-11 fields from config if provided (explicitly override)
+	if cfg.RelayName != "" {
+		r.Info.Name = cfg.RelayName
+	}
+	if cfg.RelayDescription != "" {
+		r.Info.Description = cfg.RelayDescription
+	}
+	if cfg.RelayContact != "" {
+		r.Info.Contact = cfg.RelayContact
+	}
+	if cfg.RelayIcon != "" {
+		r.Info.Icon = cfg.RelayIcon
+	}
+	if cfg.RelayBanner != "" {
+		r.Info.Banner = cfg.RelayBanner
+	}
+	if cfg.RelayPubKey != "" {
+		r.Info.PubKey = cfg.RelayPubKey
+	}
 
 	// If we derived a secret earlier and didn't set the pubkey via config,
 	// try to set it here as a final step.
@@ -196,4 +217,24 @@ func ensureSupportedNip11(r *khatru.Relay) {
 		}
 	}
 	r.Info.SupportedNIPs = append(r.Info.SupportedNIPs, 11)
+}
+
+func ensureSupportedNips(r *khatru.Relay, nips []int) {
+	if r == nil || r.Info == nil {
+		return
+	}
+	present := map[int]bool{}
+	for _, v := range r.Info.SupportedNIPs {
+		switch vv := v.(type) {
+		case int:
+			present[vv] = true
+		case int64:
+			present[int(vv)] = true
+		}
+	}
+	for _, ni := range nips {
+		if !present[ni] {
+			r.Info.SupportedNIPs = append(r.Info.SupportedNIPs, ni)
+		}
+	}
 }
