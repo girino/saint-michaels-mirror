@@ -1,0 +1,146 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>nostr relay — NIP-11</title>
+    <style>
+      body{font-family: system-ui, sans-serif;line-height:1.4;margin:2rem;background:#0f172a;color:#e6eef8}
+      .card{background:#071033;padding:1rem;border-radius:8px;max-width:900px;margin:0 auto}
+      pre{white-space:pre-wrap;word-break:break-word;background:#041129;padding:.5rem;border-radius:6px}
+      header h1{margin:0 0 .5rem}
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <header>
+        <h1>NIP-11: Relay info</h1>
+        <p id="desc">Loading…</p>
+      </header>
+
+      <section>
+        <h2>Full NIP-11 JSON</h2>
+        <pre id="json">Loading…</pre>
+      </section>
+    </div>
+
+    <script>
+      async function loadNip11(){
+        try{
+          const res = await fetch('/.well-known/nostr.json',{headers:{'Accept':'application/nostr+json,application/json'}})
+          if(!res.ok) throw new Error('HTTP '+res.status)
+          const j = await res.json()
+          document.getElementById('json').textContent = JSON.stringify(j, null, 2)
+          document.getElementById('desc').textContent = j.description || j.name || 'No description'
+        }catch(err){
+          document.getElementById('json').textContent = 'Failed to load: '+err
+          document.getElementById('desc').textContent = 'Unavailable'
+        }
+      }
+      loadNip11()
+    </script>
+  </body>
+</html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>{{.Name}} — NIP-11 Relay Info</title>
+  <style>
+    /* Nostr-inspired palette */
+    :root{
+      --bg:#0b0b0b; /* deep near-black */
+      --card:#0f1113;
+      --muted:#9aa4af;
+      --accent:#ffcc00; /* nostr/yellow accent */
+      --accent-2:#ffd966;
+      --white:#ffffff;
+      --glass: rgba(255,255,255,0.03);
+    }
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,var(--bg),#060606);color:var(--white);font-family:Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    .wrap{max-width:980px;margin:48px auto;padding:28px;background:var(--card);border-radius:12px;box-shadow:0 6px 30px rgba(0,0,0,0.6);}
+    header{display:flex;gap:16px;align-items:center}
+    .logo{width:80px;height:80px;border-radius:10px;overflow:hidden;background:var(--glass);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--bg)}
+    h1{margin:0;font-size:1.6rem}
+    p.lead{margin:6px 0 14px;color:var(--muted)}
+    .meta{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);padding:14px;border-radius:8px;border:1px solid rgba(255,255,255,0.03)}
+    .k{color:var(--muted);font-size:0.85rem}
+    .v{color:var(--white);word-break:break-all}
+    footer{margin-top:18px;color:var(--muted);font-size:0.85rem}
+    .nips{display:flex;gap:8px;flex-wrap:wrap}
+    .nip{background:rgba(255,255,255,0.04);padding:6px 8px;border-radius:6px;color:var(--accent);font-weight:600}
+    a.pill{display:inline-block;padding:6px 10px;border-radius:8px;background:var(--accent);color:#000;text-decoration:none;font-weight:700}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    {{if .Banner}}
+      <div style="width:100%;height:160px;margin:-28px -28px 18px;border-top-left-radius:12px;border-top-right-radius:12px;overflow:hidden;box-shadow:inset 0 -30px 60px rgba(0,0,0,0.4)">
+        <img src="{{.Banner}}" alt="banner" style="width:100%;height:100%;object-fit:cover;display:block"/>
+      </div>
+    {{end}}
+    <header>
+      <div class="logo">
+        {{if .Icon}}
+          <img src="{{.Icon}}" alt="icon" style="width:100%;height:100%;object-fit:cover"/>
+        {{else}}
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="24" height="24" rx="4" fill="var(--accent)"/><path d="M6 12h12M6 8h12M6 16h8" stroke="#000" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        {{end}}
+      </div>
+      <div style="flex:1">
+        <h1>{{.Name}}</h1>
+        <p class="lead">{{.Description}}</p>
+        <div style="display:flex;gap:10px;align-items:center">
+          {{if .ServiceURL}}<a class="pill" href="{{.ServiceURL}}">Website</a>{{end}}
+          {{if .Contact}}<span class="k">Contact:</span>&nbsp;<span class="v">{{.Contact}}</span>{{end}}
+        </div>
+      </div>
+    </header>
+
+    <div class="meta">
+      <div class="card">
+        <div class="k">Public key</div>
+        <div class="v">{{.PubKey}}</div>
+      </div>
+      <div class="card">
+        <div class="k">Software / Version</div>
+        <div class="v">{{.Software}} — {{.Version}}</div>
+      </div>
+      <div class="card">
+        <div class="k">Supported NIPs</div>
+        <div class="nips">
+          {{range .SupportedNIPs}}<div class="nip">NIP-{{.}}</div>{{end}}
+        </div>
+      </div>
+      <div class="card">
+        <div class="k">Icon / Banner</div>
+        <div class="v">{{if .Icon}}Icon set{{else}}—{{end}} / {{if .Banner}}Banner set{{else}}—{{end}}</div>
+      </div>
+    </div>
+
+    <section style="margin-top:18px" class="card">
+      <div class="k">Full NIP-11 JSON</div>
+      <pre id="nip11" style="white-space:pre-wrap;margin:8px 0 0;color:var(--muted);font-size:0.9rem;background:transparent;border:none;padding:0">loading...</pre>
+      <script>
+        (async function(){
+          try{
+            const resp = await fetch('/.well-known/nostr.json');
+            if(!resp.ok) throw new Error('failed to fetch');
+            const data = await resp.json();
+            const pretty = JSON.stringify(data, null, 2);
+            document.getElementById('nip11').textContent = pretty;
+          }catch(e){
+            document.getElementById('nip11').textContent = 'failed to load NIP-11: '+e;
+          }
+        })();
+      </script>
+    </section>
+
+    <footer>
+      <div>Powered by khatru — NIP-11 relay info shown above.</div>
+    </footer>
+  </div>
+</body>
+</html>
