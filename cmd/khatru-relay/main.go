@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/hex"
 	"encoding/json"
+	"html/template"
 	"log"
 	"net"
 	"net/http"
@@ -174,6 +175,45 @@ func main() {
 		})
 
 		// khatru will serve NIP-11 itself; we only expose metrics here.
+		// parse the HTML template once and serve it with r.Info as data
+		tplPath := "cmd/khatru-relay/templates/index.html"
+		tpl, err := template.ParseFiles(tplPath)
+		if err != nil {
+			log.Fatalf("failed to parse template %s: %v", tplPath, err)
+		}
+
+		mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			// build a minimal view model expected by the template
+			vm := struct {
+				Name          string
+				Description   string
+				PubKey        string
+				Contact       string
+				SupportedNIPs []any
+				Software      string
+				Version       string
+				Icon          string
+				Banner        string
+				ServiceURL    string
+			}{
+				Name:          r.Info.Name,
+				Description:   r.Info.Description,
+				PubKey:        r.Info.PubKey,
+				Contact:       r.Info.Contact,
+				SupportedNIPs: r.Info.SupportedNIPs,
+				Software:      r.Info.Software,
+				Version:       r.Info.Version,
+				Icon:          r.Info.Icon,
+				Banner:        r.Info.Banner,
+				ServiceURL:    r.ServiceURL,
+			}
+
+			if err := tpl.Execute(w, vm); err != nil {
+				http.Error(w, "template render error", http.StatusInternalServerError)
+				log.Printf("template execute error: %v", err)
+			}
+		})
 	default:
 		log.Fatalf("unsupported store type: %T", s)
 	}
