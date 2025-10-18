@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/fiatjaf/eventstore"
+	"github.com/fiatjaf/khatru"
 	"github.com/nbd-wtf/go-nostr"
 )
 
@@ -164,8 +165,10 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 		return ch, nil
 	}
 
-	// increment query request counter
-	atomic.AddInt64(&r.queryRequests, 1)
+	// don't count internal calls (deletion/expiration checks that run QueryEvents internally)
+	if !khatru.IsInternalCall(ctx) {
+		atomic.AddInt64(&r.queryRequests, 1)
+	}
 
 	// use FetchMany which ends when all relays return EOSE
 	evch := r.pool.FetchMany(ctx, r.queryUrls, filter)
