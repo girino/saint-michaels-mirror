@@ -170,37 +170,46 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 	// count total requests
 	atomic.AddInt64(&r.queryRequests, 1)
 
-	// determine whether this looks like an internal query
-	isInternal := khatru.IsInternalCall(ctx)
-	// heuristic: queries that request kind 5 (khatru internal QueryEvents) should be considered internal
-	for _, k := range filter.Kinds {
-		if k == 5 {
-			isInternal = true
-			break
-		}
-	}
-	// allow callers to explicitly opt-out of the internal short-circuit via context value
-	if v := ctx.Value("khatru.allow_internal_queries"); v != nil {
-		if bv, ok := v.(bool); ok && bv {
-			isInternal = false
-		}
-	}
-
-	if isInternal {
+	// If khatru explicitly marked this as an internal call, short-circuit.
+	if khatru.IsInternalCall(ctx) {
 		atomic.AddInt64(&r.queryInternal, 1)
 		if r.Verbose {
-			log.Printf("[relaystore][DEBUG] internal query short-circuited filter=%+v", filter)
+			log.Printf("[relaystore][DEBUG] internal query short-circuited (khatru internal call) filter=%+v", filter)
 		}
 		ch := make(chan *nostr.Event)
 		close(ch)
 		return ch, nil
 	}
+
+	// Special-case: adding.go performs a deletion check by calling QueryEvents
+	// with the literal: nostr.Filter{Kinds: []int{5}, Tags: nostr.TagMap{"#e": []string{evt.ID}}}
+	// That call does NOT set khatru's internalCallKey, but we still want to
+	// short-circuit that exact shape so deletion checks aren't forwarded to remotes.
+	// Only apply the adding.go kind=5/#e short-circuit when there is no
+	// subscription id or other websocket context value set at index 1. If a
+	// value exists at index 1 (khatru uses that slot for subscription id),
+	// this is likely a real client subscription and should not be treated as
+	// the internal deletion-check.
+	// require: no ctx[1] value (subscription id). We don't check for a
+	// websocket connection here because AddEvent and other internal callers
+	// may execute with a connection in-context; checking ctx[1] is the
+	// specific guard requested.
+	if isAddingKind5Filter(filter) && ctx.Value(1) == nil {
+		atomic.AddInt64(&r.queryInternal, 1)
+		if r.Verbose {
+			log.Printf("[relaystore][DEBUG] internal query short-circuited (adding.go kind=5 #e, no ctx[1]) filter=%+v", filter)
+		}
+		ch := make(chan *nostr.Event)
+		close(ch)
+		return ch, nil
+	}
+
 	atomic.AddInt64(&r.queryExternal, 1)
 
 	// if no pool available, return closed channel
 	if r.pool == nil {
 		if r.Verbose {
-			log.Printf("[relaystore][DEBUG] QueryEvents called but no pool initialized (internal=%v) filter=%+v", isInternal, filter)
+			log.Printf("[relaystore][DEBUG] QueryEvents called but no pool initialized (khatru_internal_call=%v) filter=%+v", khatru.IsInternalCall(ctx), filter)
 		}
 		ch := make(chan *nostr.Event)
 		close(ch)
@@ -209,7 +218,7 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 
 	// use FetchMany which ends when all relays return EOSE
 	if r.Verbose {
-		log.Printf("[relaystore][DEBUG] QueryEvents called (internal=%v) filter=%+v", isInternal, filter)
+		log.Printf("[relaystore][DEBUG] QueryEvents called (khatru_internal_call=%v) filter=%+v", khatru.IsInternalCall(ctx), filter)
 	}
 
 	// before subscribing, try ensuring relays to detect quick failures and count them
@@ -346,3 +355,18 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 // Ensure RelayStore implements eventstore.Store and eventstore.Counter
 var _ eventstore.Store = (*RelayStore)(nil)
 var _ eventstore.Counter = (*RelayStore)(nil)
+
+// isAddingKind5Filter detects the exact filter literal used in khatru's
+// adding.go deletion-check: {Kinds: []int{5}, Tags: TagMap{"#e": []string{id}}}
+func isAddingKind5Filter(f nostr.Filter) bool {
+	if len(f.Kinds) != 1 || f.Kinds[0] != 5 {
+		return false
+	}
+	if len(f.Tags) != 1 {
+		return false
+	}
+	if vs, ok := f.Tags["#e"]; ok {
+		return len(vs) == 1 && len(f.Authors) == 0 && f.Since == nil && f.Until == nil && len(f.IDs) == 0
+	}
+	return false
+}
