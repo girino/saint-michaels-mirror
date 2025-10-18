@@ -1,0 +1,22 @@
+# Binaries for programs and plugins
+*.exe
+*.out
+*.dll
+*.so
+*.dylib
+
+# Build directories
+bin/
+build/
+
+# Go specific
+*.test
+/vendor/
+
+# IDEs
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
