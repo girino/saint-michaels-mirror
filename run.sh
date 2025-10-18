@@ -2,25 +2,25 @@
 set -euo pipefail
 
 # run.sh - build and run the khatru relay for testing
-# Usage: ./run.sh [args]
-# Environment variables to override defaults:
-#  PUBLISH_REMOTES - comma-separated publish remotes (default: ws://localhost:10547)
-#  QUERY_REMOTES   - comma-separated query remotes (default: wss://wot.girino.org,wss://nostr.girino.org)
-#  ADDR            - address to listen on (default: :8080)
-#  DATA_DIR        - data dir (default: ./data)
-#  VERBOSE         - if set to 1, enables --verbose
+# This script no longer accepts command-line flags or environment overrides
+# directly. Instead it reads configuration from .env files. It will source
+# the following files (if present) in this order, allowing overrides:
+#  - .env
+#  - .env.local
+# Any variables defined there will be exported into the environment for the
+# binary to consume.
 
-PUBLISH_REMOTES=${PUBLISH_REMOTES:-ws://localhost:10547}
-QUERY_REMOTES=${QUERY_REMOTES:-wss://wot.girino.org,wss://nostr.girino.org}
-ADDR=${ADDR:-:8080}
-DATA_DIR=${DATA_DIR:-./data}
-VERBOSE_FLAG=""
-if [ "${VERBOSE:-0}" != "0" ]; then
-  VERBOSE_FLAG="--verbose"
-fi
+BASEDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
+echo "Loading .env files (if present)"
+# export variables from .env files
+set -a
+[ -f "${BASEDIR}/.env" ] && source "${BASEDIR}/.env"
+[ -f "${BASEDIR}/.env.local" ] && source "${BASEDIR}/.env.local"
+set +a
 
 echo "Building..."
 go build -o bin/khatru-relay ./cmd/khatru-relay
 
-echo "Starting khatru relay"
-./bin/khatru-relay --addr "${ADDR}" --data "${DATA_DIR}" --remotes "${PUBLISH_REMOTES}" --query-remotes "${QUERY_REMOTES}" ${VERBOSE_FLAG}
+echo "Starting khatru relay (configuration comes from .env files)"
+exec ./bin/khatru-relay
