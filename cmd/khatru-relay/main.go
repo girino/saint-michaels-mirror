@@ -13,6 +13,7 @@ import (
 	"github.com/fiatjaf/khatru"
 	"github.com/girino/relay-agregator/relaystore"
 	"github.com/nbd-wtf/go-nostr"
+	nip11 "github.com/nbd-wtf/go-nostr/nip11"
 	nip19 "github.com/nbd-wtf/go-nostr/nip19"
 )
 
@@ -96,6 +97,40 @@ func main() {
 		// do not log secrets
 	}
 
+	// Ensure some canonical NIP-11 fields are set on the relay Info. ApplyToRelay
+	// sets most fields from config; here we only set safe defaults when empty
+	// and make sure SupportedNIPs includes 11 so khatru will serve NIP-11.
+	if r.Info == nil {
+		r.Info = &nip11.RelayInformationDocument{}
+	}
+	if r.Info.Software == "" {
+		r.Info.Software = "https://github.com/girino/relay-agregator"
+	}
+	if r.Info.Version == "" {
+		r.Info.Version = "0.1.0"
+	}
+	ensureSupportedNip11(r)
+
+	// If we derived a secret earlier and didn't set the pubkey via config,
+	// try to set it here as a final step.
+	if r.Info.PubKey == "" && sec != "" {
+		if strings.HasPrefix(sec, "nsec") {
+			if _, val, err := nip19.Decode(sec); err == nil {
+				if s, ok := val.(string); ok {
+					if pk, err := nostr.GetPublicKey(s); err == nil {
+						r.Info.PubKey = pk
+					}
+				}
+			}
+		} else {
+			if _, err := hex.DecodeString(sec); err == nil {
+				if pk, err := nostr.GetPublicKey(sec); err == nil {
+					r.Info.PubKey = pk
+				}
+			}
+		}
+	}
+
 	// hook store functions into relay
 	switch s := rStore.(type) {
 	case *slicestore.SliceStore:
@@ -117,28 +152,7 @@ func main() {
 			}
 		})
 
-		// serve homepage template and NIP-11 JSON
-		mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-			// if Accept header requests nostr+json, serve NIP-11 JSON
-			if strings.Contains(req.Header.Get("Accept"), "application/nostr+json") || strings.Contains(req.Header.Get("Accept"), "application/json") {
-				w.Header().Set("Content-Type", "application/nostr+json")
-				// encode r.Info as JSON
-				if err := json.NewEncoder(w).Encode(r.Info); err != nil {
-					http.Error(w, "failed to encode nip11", http.StatusInternalServerError)
-				}
-				return
-			}
-			// otherwise serve template
-			http.ServeFile(w, req, "cmd/khatru-relay/templates/index.html")
-		})
-
-		// also serve well-known path explicitly
-		mux.HandleFunc("/.well-known/nostr.json", func(w http.ResponseWriter, req *http.Request) {
-			w.Header().Set("Content-Type", "application/nostr+json")
-			if err := json.NewEncoder(w).Encode(r.Info); err != nil {
-				http.Error(w, "failed to encode nip11", http.StatusInternalServerError)
-			}
-		})
+		// khatru will serve NIP-11 itself; we only expose metrics here.
 	default:
 		log.Fatalf("unsupported store type: %T", s)
 	}
@@ -163,4 +177,23 @@ func main() {
 	if err := r.Start(host, port); err != nil {
 		log.Fatalf("relay exited: %v", err)
 	}
+}
+
+func ensureSupportedNip11(r *khatru.Relay) {
+	if r == nil || r.Info == nil {
+		return
+	}
+	for _, v := range r.Info.SupportedNIPs {
+		switch vv := v.(type) {
+		case int:
+			if vv == 11 {
+				return
+			}
+		case int64:
+			if int(vv) == 11 {
+				return
+			}
+		}
+	}
+	r.Info.SupportedNIPs = append(r.Info.SupportedNIPs, 11)
 }
