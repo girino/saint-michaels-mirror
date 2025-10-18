@@ -167,18 +167,40 @@ func (r *RelayStore) ensureRelay(ctx context.Context, url string) (*nostr.Relay,
 
 // QueryEvents returns an empty, closed channel because this store does not persist events.
 func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan *nostr.Event, error) {
-	// count both total and internal/external separately (do this regardless of pool state)
+	// count total requests
 	atomic.AddInt64(&r.queryRequests, 1)
-	if khatru.IsInternalCall(ctx) {
-		atomic.AddInt64(&r.queryInternal, 1)
-	} else {
-		atomic.AddInt64(&r.queryExternal, 1)
+
+	// determine whether this looks like an internal query
+	isInternal := khatru.IsInternalCall(ctx)
+	// heuristic: queries that request kind 5 (khatru internal QueryEvents) should be considered internal
+	for _, k := range filter.Kinds {
+		if k == 5 {
+			isInternal = true
+			break
+		}
 	}
+	// allow callers to explicitly opt-out of the internal short-circuit via context value
+	if v := ctx.Value("khatru.allow_internal_queries"); v != nil {
+		if bv, ok := v.(bool); ok && bv {
+			isInternal = false
+		}
+	}
+
+	if isInternal {
+		atomic.AddInt64(&r.queryInternal, 1)
+		if r.Verbose {
+			log.Printf("[relaystore][DEBUG] internal query short-circuited filter=%+v", filter)
+		}
+		ch := make(chan *nostr.Event)
+		close(ch)
+		return ch, nil
+	}
+	atomic.AddInt64(&r.queryExternal, 1)
 
 	// if no pool available, return closed channel
 	if r.pool == nil {
 		if r.Verbose {
-			log.Printf("[relaystore][DEBUG] QueryEvents called but no pool initialized (internal=%v) filter=%+v", khatru.IsInternalCall(ctx), filter)
+			log.Printf("[relaystore][DEBUG] QueryEvents called but no pool initialized (internal=%v) filter=%+v", isInternal, filter)
 		}
 		ch := make(chan *nostr.Event)
 		close(ch)
@@ -187,7 +209,7 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 
 	// use FetchMany which ends when all relays return EOSE
 	if r.Verbose {
-		log.Printf("[relaystore][DEBUG] QueryEvents called (internal=%v) filter=%+v", khatru.IsInternalCall(ctx), filter)
+		log.Printf("[relaystore][DEBUG] QueryEvents called (internal=%v) filter=%+v", isInternal, filter)
 	}
 
 	// before subscribing, try ensuring relays to detect quick failures and count them
