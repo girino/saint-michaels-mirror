@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/fiatjaf/eventstore"
-	"github.com/fiatjaf/khatru"
 	"github.com/nbd-wtf/go-nostr"
+	"github.com/fiatjaf/khatru"
 )
 
 // RelayStore forwards events to a set of remote nostr relays. It does not persist events locally.
@@ -34,6 +34,7 @@ type RelayStore struct {
 	publishFailures     int64
 	queryRequests       int64
 	queryEventsReturned int64
+	queryFailures       int64
 }
 
 // Stats holds runtime counters exported by RelayStore
@@ -43,6 +44,7 @@ type Stats struct {
 	PublishFailures     int64 `json:"publish_failures"`
 	QueryRequests       int64 `json:"query_requests"`
 	QueryEventsReturned int64 `json:"query_events_returned"`
+	QueryFailures       int64 `json:"query_failures"`
 }
 
 // Stats returns a snapshot of the RelayStore counters
@@ -53,6 +55,7 @@ func (r *RelayStore) Stats() Stats {
 		PublishFailures:     atomic.LoadInt64(&r.publishFailures),
 		QueryRequests:       atomic.LoadInt64(&r.queryRequests),
 		QueryEventsReturned: atomic.LoadInt64(&r.queryEventsReturned),
+		QueryFailures:       atomic.LoadInt64(&r.queryFailures),
 	}
 }
 
@@ -171,6 +174,20 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 	}
 
 	// use FetchMany which ends when all relays return EOSE
+	// before subscribing, try ensuring relays to detect quick failures and count them
+	for _, q := range r.queryUrls {
+		if q == "" {
+			continue
+		}
+		if _, err := r.pool.EnsureRelay(q); err != nil {
+			// count query relay failure
+			atomic.AddInt64(&r.queryFailures, 1)
+			if r.Verbose {
+				log.Printf("[relaystore][WARN] failed to ensure query relay %s: %v", q, err)
+			}
+		}
+	}
+
 	evch := r.pool.FetchMany(ctx, r.queryUrls, filter)
 	out := make(chan *nostr.Event)
 
