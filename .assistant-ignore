@@ -1,0 +1,4 @@
+# Files and globs that should not be read/modified by assistants or automation
+.env
+secrets/**
+# add any other sensitive files here
