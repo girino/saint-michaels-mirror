@@ -17,7 +17,11 @@ import (
 type RelayStore struct {
 	urls   []string
 	relays map[string]*nostr.Relay
-	mu     sync.RWMutex
+	// queryUrls are the remotes used for answering queries/subscriptions
+	queryUrls []string
+	// pool manages connections for query remotes
+	pool *nostr.SimplePool
+	mu   sync.RWMutex
 	// publish timeout per remote
 	publishTimeout time.Duration
 	// verbose enables debug logging
@@ -28,6 +32,17 @@ type RelayStore struct {
 func New(urls []string) *RelayStore {
 	rs := &RelayStore{
 		urls:           urls,
+		relays:         make(map[string]*nostr.Relay),
+		publishTimeout: 7 * time.Second,
+	}
+	return rs
+}
+
+// NewWithQueryRemotes creates a RelayStore with separate publish remotes and query remotes.
+func NewWithQueryRemotes(publish []string, query []string) *RelayStore {
+	rs := &RelayStore{
+		urls:           publish,
+		queryUrls:      query,
 		relays:         make(map[string]*nostr.Relay),
 		publishTimeout: 7 * time.Second,
 	}
@@ -62,6 +77,16 @@ func (r *RelayStore) Init() error {
 				log.Printf("[relaystore] connected to %s", url)
 			}
 		}(u)
+	}
+
+	// setup query pool: if no queryUrls provided, use sensible defaults
+	if len(r.queryUrls) == 0 {
+		r.queryUrls = []string{"wss://wot.girino.org", "wss://nostr.girino.org"}
+	}
+	// create a SimplePool for queries
+	r.pool = nostr.NewSimplePool(context.Background(), nostr.WithPenaltyBox())
+	if r.Verbose {
+		log.Printf("[relaystore] query remotes: %v", r.queryUrls)
 	}
 	return nil
 }
@@ -105,9 +130,32 @@ func (r *RelayStore) ensureRelay(ctx context.Context, url string) (*nostr.Relay,
 
 // QueryEvents returns an empty, closed channel because this store does not persist events.
 func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan *nostr.Event, error) {
-	ch := make(chan *nostr.Event)
-	close(ch)
-	return ch, nil
+	// if no pool available, return closed channel
+	if r.pool == nil {
+		ch := make(chan *nostr.Event)
+		close(ch)
+		return ch, nil
+	}
+
+	// use FetchMany which ends when all relays return EOSE
+	evch := r.pool.FetchMany(ctx, r.queryUrls, filter)
+	out := make(chan *nostr.Event)
+
+	go func() {
+		defer close(out)
+		for ie := range evch {
+			// ie is a nostr.RelayEvent containing the Event pointer
+			if ie.Event != nil {
+				select {
+				case out <- ie.Event:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}()
+
+	return out, nil
 }
 
 // DeleteEvent is a no-op for relay forwarding store.

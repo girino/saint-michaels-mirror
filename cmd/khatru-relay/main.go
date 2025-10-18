@@ -17,6 +17,7 @@ func main() {
 	addr := flag.String("addr", ":8080", "address to listen on")
 	dataDir := flag.String("data", "./data", "path to store data")
 	remotes := flag.String("remotes", "", "comma-separated list of remote relay URLs to forward events to")
+	queryRemotes := flag.String("query-remotes", "", "comma-separated list of remote relay URLs to use for queries/subscriptions")
 	verbose := flag.Bool("verbose", false, "enable verbose/debug logging")
 	flag.Parse()
 
@@ -26,9 +27,22 @@ func main() {
 
 	// choose storage: if remotes provided, use relaystore; otherwise use in-memory slicestore
 	var rStore interface{}
-	if *remotes != "" {
-		// use relaystore
-		rs := relaystore.New(strings.Split(*remotes, ","))
+	if *remotes != "" || *queryRemotes != "" {
+		// use relaystore, allow separate query remotes
+		pub := []string{}
+		qry := []string{}
+		if *remotes != "" {
+			pub = strings.Split(*remotes, ",")
+		}
+		if *queryRemotes != "" {
+			qry = strings.Split(*queryRemotes, ",")
+		}
+		var rs *relaystore.RelayStore
+		if len(qry) > 0 {
+			rs = relaystore.NewWithQueryRemotes(pub, qry)
+		} else {
+			rs = relaystore.New(pub)
+		}
 		if *verbose {
 			rs.Verbose = true
 		}
