@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -76,6 +78,16 @@ func main() {
 		r.StoreEvent = append(r.StoreEvent, s.SaveEvent)
 		r.QueryEvents = append(r.QueryEvents, s.QueryEvents)
 		r.CountEvents = append(r.CountEvents, s.CountEvents)
+		// expose stats endpoint using the relay's router
+		mux := r.Router()
+		mux.HandleFunc("/stats", func(w http.ResponseWriter, req *http.Request) {
+			stats := s.Stats()
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(stats); err != nil {
+				http.Error(w, "failed to encode stats", http.StatusInternalServerError)
+				return
+			}
+		})
 	default:
 		log.Fatalf("unsupported store type: %T", s)
 	}

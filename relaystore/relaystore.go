@@ -7,6 +7,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/fiatjaf/eventstore"
@@ -26,6 +27,32 @@ type RelayStore struct {
 	publishTimeout time.Duration
 	// verbose enables debug logging
 	Verbose bool
+	// stats
+	publishAttempts     int64
+	publishSuccesses    int64
+	publishFailures     int64
+	queryRequests       int64
+	queryEventsReturned int64
+}
+
+// Stats holds runtime counters exported by RelayStore
+type Stats struct {
+	PublishAttempts     int64 `json:"publish_attempts"`
+	PublishSuccesses    int64 `json:"publish_successes"`
+	PublishFailures     int64 `json:"publish_failures"`
+	QueryRequests       int64 `json:"query_requests"`
+	QueryEventsReturned int64 `json:"query_events_returned"`
+}
+
+// Stats returns a snapshot of the RelayStore counters
+func (r *RelayStore) Stats() Stats {
+	return Stats{
+		PublishAttempts:     atomic.LoadInt64(&r.publishAttempts),
+		PublishSuccesses:    atomic.LoadInt64(&r.publishSuccesses),
+		PublishFailures:     atomic.LoadInt64(&r.publishFailures),
+		QueryRequests:       atomic.LoadInt64(&r.queryRequests),
+		QueryEventsReturned: atomic.LoadInt64(&r.queryEventsReturned),
+	}
 }
 
 // New creates a RelayStore that will forward to the provided comma-separated URLs.
@@ -137,6 +164,9 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 		return ch, nil
 	}
 
+	// increment query request counter
+	atomic.AddInt64(&r.queryRequests, 1)
+
 	// use FetchMany which ends when all relays return EOSE
 	evch := r.pool.FetchMany(ctx, r.queryUrls, filter)
 	out := make(chan *nostr.Event)
@@ -146,6 +176,8 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 		for ie := range evch {
 			// ie is a nostr.RelayEvent containing the Event pointer
 			if ie.Event != nil {
+				// count returned events
+				atomic.AddInt64(&r.queryEventsReturned, 1)
 				select {
 				case out <- ie.Event:
 				case <-ctx.Done():
@@ -194,6 +226,9 @@ func (r *RelayStore) SaveEvent(ctx context.Context, evt *nostr.Event) error {
 				log.Printf("[relaystore][DEBUG] publishing event %s to %s", evt.ID, u)
 			}
 
+			// count attempt
+			atomic.AddInt64(&r.publishAttempts, 1)
+
 			rl, err := r.ensureRelay(cctx, u)
 			if err != nil {
 				errsMu.Lock()
@@ -209,11 +244,15 @@ func (r *RelayStore) SaveEvent(ctx context.Context, evt *nostr.Event) error {
 				errsMu.Lock()
 				errs = append(errs, fmt.Errorf("%s: %w", u, err))
 				errsMu.Unlock()
+				// count failure
+				atomic.AddInt64(&r.publishFailures, 1)
 				if r.Verbose {
 					log.Printf("[relaystore][WARN] publish to %s failed: %v", u, err)
 				}
 				return
 			}
+			// count success
+			atomic.AddInt64(&r.publishSuccesses, 1)
 			if r.Verbose {
 				log.Printf("[relaystore][DEBUG] publish to %s succeeded for event %s", u, evt.ID)
 			}
