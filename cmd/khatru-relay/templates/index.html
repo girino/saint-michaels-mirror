@@ -71,7 +71,7 @@
     <div class="meta">
       <div class="card">
         <div class="k">Public key</div>
-        <div class="v">{{.PubKey}}{{if .PubKeyNPub}}<br/><a class="v" href="nostr:{{.PubKeyNPub}}">{{.PubKeyNPub}}</a>{{end}}</div>
+        <div class="v">{{if .PubKeyNPub}}<a class="v" href="nostr:{{.PubKeyNPub}}">{{.PubKeyNPub}}</a>{{else}}{{.PubKey}}{{end}}</div>
       </div>
       <div class="card">
         <div class="k">Software / Version</div>
