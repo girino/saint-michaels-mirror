@@ -12,7 +12,7 @@ FROM golang:1.24.1-bullseye AS builder
 WORKDIR /src
 
 # Accept build arguments for target architecture
-ARG GOOS
+ARG GOOS=linux
 ARG GOARCH
 
 # Copy modules manifests first for better caching
@@ -23,7 +23,9 @@ RUN go mod download
 COPY . .
 
 # Build the relay binary
-RUN CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} \
+# If GOARCH is not provided, detect it from the build environment
+RUN ARCH=${GOARCH:-$(go env GOARCH)} && \
+    CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${ARCH} \
     go build -ldflags "-X main.Version=$(grep 'const Version =' cmd/saint-michaels-mirror/version.go | cut -d'"' -f2)" -o /out/saint-michaels-mirror ./cmd/saint-michaels-mirror
 
 # Final minimal image
