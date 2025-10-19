@@ -22,5 +22,5 @@ set +a
 echo "Building..."
 go build -o bin/saint-michaels-mirror ./cmd/saint-michaels-mirror
 
-echo "Starting khatru relay (configuration comes from .env files)"
+echo "Starting saint-michaels-mirror (configuration comes from .env files)"
 exec ./bin/saint-michaels-mirror
