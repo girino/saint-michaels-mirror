@@ -93,11 +93,28 @@ jobs:
       - name: Archive release artifacts
         run: |
           zip -r release-${{ github.ref_name }}.zip release/
-      - name: Upload release asset (zip)
-        uses: actions/upload-release-asset@v3
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: release-${{ github.ref_name }}.zip
-          asset_name: khatru-relay-${{ github.ref_name }}.zip
-          asset_content_type: application/zip
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload release asset (zip) via curl
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          UPLOAD_URL="${{ steps.create_release.outputs.upload_url }}"
+          # strip the template part {?name,label}
+          UPLOAD_URL="${UPLOAD_URL%%\{*}"
+          ASSET_FILE="release-${{ github.ref_name }}.zip"
+          ASSET_NAME="khatru-relay-${{ github.ref_name }}.zip"
+          echo "Uploading $ASSET_FILE to $UPLOAD_URL?name=$ASSET_NAME"
+          http_status=$(curl -s -o /tmp/upload_resp -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/zip" \
+            --data-binary @"$ASSET_FILE" \
+            "$UPLOAD_URL?name=$ASSET_NAME")
+          if [ "$http_status" -ge 200 ] && [ "$http_status" -lt 300 ]; then
+            echo "Upload succeeded (HTTP $http_status)"
+            cat /tmp/upload_resp
+          else
+            echo "Upload failed with HTTP status $http_status" >&2
+            cat /tmp/upload_resp >&2 || true
+            exit 1
+          fi
