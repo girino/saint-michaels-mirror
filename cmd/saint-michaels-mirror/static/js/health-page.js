@@ -1,8 +1,9 @@
 /*
 Copyright (c) 2025 Girino Vey.
 
-This software is licensed under the Girino License.
+This software is licensed under Girino's Anarchist License (GAL).
 See LICENSE file for full license text.
+License available at: https://license.girino.org/
 
 Health status page functionality for Espelho de São Miguel web interface.
 */
