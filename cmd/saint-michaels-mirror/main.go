@@ -227,7 +227,7 @@ func main() {
 
 		health := map[string]interface{}{
 			"status":                       status,
-			"service":                      "saint-michaels-mirror",
+			"service":                      "Espelho de São Miguel",
 			"version":                      Version,
 			"main_health_state":            relayStats.MainHealthState,
 			"publish_health_state":         relayStats.PublishHealthState,
@@ -352,7 +352,7 @@ func main() {
 		log.Fatalf("invalid port: %v", err)
 	}
 
-	log.Printf("Starting saint-michaels-mirror on %s", cfg.Addr)
+	log.Printf("Starting Espelho de São Miguel on %s", cfg.Addr)
 	if err := r.Start(host, port); err != nil {
 		log.Fatalf("relay exited: %v", err)
 	}

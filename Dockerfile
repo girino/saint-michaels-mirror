@@ -1,4 +1,4 @@
-# Multi-stage Dockerfile for saint-michaels-mirror
+# Multi-stage Dockerfile for Espelho de São Miguel
 # Build stage
 FROM golang:1.24.1-bullseye AS builder
 WORKDIR /src

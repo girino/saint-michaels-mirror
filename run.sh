@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# run.sh - build and run the saint-michaels-mirror for testing
+# run.sh - build and run the Espelho de São Miguel for testing
 # This script no longer accepts command-line flags or environment overrides
 # directly. Instead it reads configuration from .env files. It will source
 # the following files (if present) in this order, allowing overrides:
@@ -22,5 +22,5 @@ set +a
 echo "Building..."
 go build -o bin/saint-michaels-mirror ./cmd/saint-michaels-mirror
 
-echo "Starting saint-michaels-mirror (configuration comes from .env files)"
+echo "Starting Espelho de São Miguel (configuration comes from .env files)"
 exec ./bin/saint-michaels-mirror
