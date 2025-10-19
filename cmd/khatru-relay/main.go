@@ -202,11 +202,41 @@ func main() {
 	// expose health endpoint for docker healthchecks
 	mux.HandleFunc("/health", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		health := map[string]interface{}{
-			"status":  "healthy",
-			"service": "khatru-relay",
-			"version": Version,
+
+		// Get relaystore health status
+		relayStats := rs.Stats()
+
+		// Determine overall health status and HTTP status code
+		var httpStatus int
+		var status string
+
+		switch relayStats.MainHealthState {
+		case "GREEN":
+			httpStatus = http.StatusOK
+			status = "healthy"
+		case "YELLOW":
+			httpStatus = http.StatusOK // Still OK but degraded
+			status = "degraded"
+		case "RED":
+			httpStatus = http.StatusServiceUnavailable
+			status = "unhealthy"
+		default:
+			httpStatus = http.StatusInternalServerError
+			status = "unknown"
 		}
+
+		health := map[string]interface{}{
+			"status":                       status,
+			"service":                      "khatru-relay",
+			"version":                      Version,
+			"main_health_state":            relayStats.MainHealthState,
+			"publish_health_state":         relayStats.PublishHealthState,
+			"query_health_state":           relayStats.QueryHealthState,
+			"consecutive_publish_failures": relayStats.ConsecutivePublishFailures,
+			"consecutive_query_failures":   relayStats.ConsecutiveQueryFailures,
+		}
+
+		w.WriteHeader(httpStatus)
 		if err := json.NewEncoder(w).Encode(health); err != nil {
 			http.Error(w, "failed to encode health status", http.StatusInternalServerError)
 			return
