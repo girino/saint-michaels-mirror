@@ -56,7 +56,14 @@
         <p class="lead">{{.Description}}</p>
         <div style="display:flex;gap:10px;align-items:center">
           {{if .ServiceURL}}<a class="pill" href="{{.ServiceURL}}">Website</a>{{end}}
-          {{if .Contact}}<span class="k">Contact:</span>&nbsp;<span class="v">{{.Contact}}</span>{{end}}
+          {{if .Contact}}
+            <span class="k">Contact:</span>&nbsp;
+            {{if .ContactIsLink}}
+              <a class="v" href="{{.ContactHref}}">{{.Contact}}</a>
+            {{else}}
+              <span class="v">{{.Contact}}</span>
+            {{end}}
+          {{end}}
         </div>
       </div>
     </header>
