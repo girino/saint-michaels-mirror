@@ -14,22 +14,7 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: '1.21'
-      - name: Set Go env paths
-        id: goenv
-        run: |
-          echo "GOMODCACHE=$(go env GOMODCACHE)" >> $GITHUB_ENV
-          echo "GOCACHE=$(go env GOCACHE)" >> $GITHUB_ENV
-          echo "GO_BUILDCACHE=~/.cache/go-build" >> $GITHUB_ENV
-      - name: Cache Go modules and build cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ${{ env.GOMODCACHE }}
-            ${{ env.GOCACHE }}
-            ${{ env.GO_BUILDCACHE }}
-          key: ${{ runner.os }}-go-mod-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-mod-
+      # Caching disabled due to runner tar extraction conflicts
       - name: Prepare release dir
         run: mkdir -p release
       - name: Build Linux amd64
