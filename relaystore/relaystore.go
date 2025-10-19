@@ -62,8 +62,10 @@ type RelayStore struct {
 	// timing statistics
 	totalPublishDurationNs int64
 	totalQueryDurationNs   int64
+	totalCountDurationNs   int64
 	publishCount           int64
 	queryCount             int64
+	countCount             int64
 }
 
 // Stats holds runtime counters exported by RelayStore
@@ -94,8 +96,10 @@ type Stats struct {
 	// Timing statistics
 	AveragePublishDurationMs float64 `json:"average_publish_duration_ms"`
 	AverageQueryDurationMs   float64 `json:"average_query_duration_ms"`
+	AverageCountDurationMs   float64 `json:"average_count_duration_ms"`
 	TotalPublishDurationMs   int64   `json:"total_publish_duration_ms"`
 	TotalQueryDurationMs     int64   `json:"total_query_duration_ms"`
+	TotalCountDurationMs     int64   `json:"total_count_duration_ms"`
 }
 
 // getHealthState determines the health state based on consecutive failures
@@ -139,17 +143,23 @@ func (r *RelayStore) Stats() Stats {
 	// Calculate timing statistics
 	totalPublishDurationNs := atomic.LoadInt64(&r.totalPublishDurationNs)
 	totalQueryDurationNs := atomic.LoadInt64(&r.totalQueryDurationNs)
+	totalCountDurationNs := atomic.LoadInt64(&r.totalCountDurationNs)
 	publishCount := atomic.LoadInt64(&r.publishCount)
 	queryCount := atomic.LoadInt64(&r.queryCount)
+	countCount := atomic.LoadInt64(&r.countCount)
 
 	var averagePublishDurationMs float64
 	var averageQueryDurationMs float64
+	var averageCountDurationMs float64
 
 	if publishCount > 0 {
 		averagePublishDurationMs = float64(totalPublishDurationNs) / float64(publishCount) / 1e6 // Convert ns to ms
 	}
 	if queryCount > 0 {
 		averageQueryDurationMs = float64(totalQueryDurationNs) / float64(queryCount) / 1e6 // Convert ns to ms
+	}
+	if countCount > 0 {
+		averageCountDurationMs = float64(totalCountDurationNs) / float64(countCount) / 1e6 // Convert ns to ms
 	}
 
 	return Stats{
@@ -176,8 +186,10 @@ func (r *RelayStore) Stats() Stats {
 		// Timing statistics
 		AveragePublishDurationMs: averagePublishDurationMs,
 		AverageQueryDurationMs:   averageQueryDurationMs,
+		AverageCountDurationMs:   averageCountDurationMs,
 		TotalPublishDurationMs:   totalPublishDurationNs / 1e6, // Convert ns to ms
 		TotalQueryDurationMs:     totalQueryDurationNs / 1e6,   // Convert ns to ms
+		TotalCountDurationMs:     totalCountDurationNs / 1e6,   // Convert ns to ms
 	}
 }
 
@@ -605,6 +617,14 @@ func (r *RelayStore) ReplaceEvent(ctx context.Context, evt *nostr.Event) error {
 // QueryEvents: internal khatru calls and the exact adding.go kind=5/#e
 // short-circuit (when ctx.Value(1) == nil) are not forwarded.
 func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int64, error) {
+	// Start timing measurement
+	startTime := time.Now()
+	defer func() {
+		duration := time.Since(startTime)
+		atomic.AddInt64(&r.totalCountDurationNs, duration.Nanoseconds())
+		atomic.AddInt64(&r.countCount, 1)
+	}()
+
 	// count total requests
 	atomic.AddInt64(&r.countRequests, 1)
 
