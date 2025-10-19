@@ -37,6 +37,12 @@ type RelayStore struct {
 	queryExternal       int64
 	queryEventsReturned int64
 	queryFailures       int64
+	// separate counters for CountEvents
+	countRequests       int64
+	countInternal       int64
+	countExternal       int64
+	countEventsReturned int64
+	countFailures       int64
 }
 
 // Stats holds runtime counters exported by RelayStore
@@ -49,6 +55,12 @@ type Stats struct {
 	QueryExternal       int64 `json:"query_external_requests"`
 	QueryEventsReturned int64 `json:"query_events_returned"`
 	QueryFailures       int64 `json:"query_failures"`
+	// CountEvents-specific counters
+	CountRequests       int64 `json:"count_requests"`
+	CountInternal       int64 `json:"count_internal_requests"`
+	CountExternal       int64 `json:"count_external_requests"`
+	CountEventsReturned int64 `json:"count_events_returned"`
+	CountFailures       int64 `json:"count_failures"`
 }
 
 // Stats returns a snapshot of the RelayStore counters
@@ -62,6 +74,11 @@ func (r *RelayStore) Stats() Stats {
 		QueryExternal:       atomic.LoadInt64(&r.queryExternal),
 		QueryEventsReturned: atomic.LoadInt64(&r.queryEventsReturned),
 		QueryFailures:       atomic.LoadInt64(&r.queryFailures),
+		CountRequests:       atomic.LoadInt64(&r.countRequests),
+		CountInternal:       atomic.LoadInt64(&r.countInternal),
+		CountExternal:       atomic.LoadInt64(&r.countExternal),
+		CountEventsReturned: atomic.LoadInt64(&r.countEventsReturned),
+		CountFailures:       atomic.LoadInt64(&r.countFailures),
 	}
 }
 
@@ -169,6 +186,7 @@ func (r *RelayStore) ensureRelay(ctx context.Context, url string) (*nostr.Relay,
 func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan *nostr.Event, error) {
 	// count total requests
 	atomic.AddInt64(&r.queryRequests, 1)
+	atomic.AddInt64(&r.countRequests, 1)
 
 	// If khatru explicitly marked this as an internal call, short-circuit.
 	if khatru.IsInternalCall(ctx) {
@@ -358,6 +376,7 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 	// short-circuit khatru internal calls
 	if khatru.IsInternalCall(ctx) {
 		atomic.AddInt64(&r.queryInternal, 1)
+		atomic.AddInt64(&r.countInternal, 1)
 		if r.Verbose {
 			log.Printf("[relaystore][DEBUG] internal count short-circuited (khatru internal call) filter=%+v", filter)
 		}
@@ -367,6 +386,7 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 	// same adding.go special-case as QueryEvents
 	if isAddingKind5Filter(filter) && ctx.Value(1) == nil {
 		atomic.AddInt64(&r.queryInternal, 1)
+		atomic.AddInt64(&r.countInternal, 1)
 		if r.Verbose {
 			log.Printf("[relaystore][DEBUG] internal count short-circuited (adding.go kind=5 #e, no ctx[1]) filter=%+v", filter)
 		}
@@ -374,6 +394,7 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 	}
 
 	atomic.AddInt64(&r.queryExternal, 1)
+	atomic.AddInt64(&r.countExternal, 1)
 
 	if r.pool == nil {
 		if r.Verbose {
@@ -393,6 +414,7 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 		}
 		if _, err := r.pool.EnsureRelay(q); err != nil {
 			atomic.AddInt64(&r.queryFailures, 1)
+			atomic.AddInt64(&r.countFailures, 1)
 			if r.Verbose {
 				log.Printf("[relaystore][WARN] failed to ensure query relay %s: %v", q, err)
 			}
@@ -403,6 +425,7 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 	cnt := r.pool.CountMany(ctx, r.queryUrls, filter, nil)
 	if cnt > 0 {
 		atomic.AddInt64(&r.queryEventsReturned, int64(cnt))
+		atomic.AddInt64(&r.countEventsReturned, int64(cnt))
 	}
 	return int64(cnt), nil
 }
