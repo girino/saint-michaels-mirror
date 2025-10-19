@@ -200,7 +200,7 @@ func main() {
 	})
 
 	// expose health endpoint for docker healthchecks
-	mux.HandleFunc("/health", func(w http.ResponseWriter, req *http.Request) {
+	mux.HandleFunc("/api/v1/health", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
 		// Get relaystore health status
