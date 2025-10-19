@@ -20,7 +20,7 @@ COPY . .
 
 # Build the relay binary
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -ldflags "-X main.Version=$(cat cmd/saint-michaels-mirror/version.go | grep -oP '"\K[^"]+(?=\")')" -o /out/saint-michaels-mirror ./cmd/saint-michaels-mirror
+    go build -ldflags "-X main.Version=$(grep 'const Version =' cmd/saint-michaels-mirror/version.go | cut -d'"' -f2)" -o /out/saint-michaels-mirror ./cmd/saint-michaels-mirror
 
 # Final minimal image
 FROM debian:bookworm-slim
