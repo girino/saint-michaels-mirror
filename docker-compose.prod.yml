@@ -2,13 +2,14 @@ version: '3.8'
 
 # Production compose: uses a published image for the relay and runs a Tor service
 # Notes:
-# - Set PROD_IMAGE to your registry image (e.g. ghcr.io/<owner>/<repo>/khatru-relay:1.0.0)
-# - The Tor service below uses dperson/torproxy as an example. Replace with your preferred Tor image if needed.
+# - Set PROD_IMAGE to your registry image for a specific version (e.g. ghcr.io/girino/saint-michaels-mirror:1.0.0-rc2)
+# - Defaults to 'latest' tag if PROD_IMAGE is not set
+# - The Tor service provides a hidden service for the relay
 # - The tor_data volume persists onion keys so the .onion address remains stable across restarts.
 
 services:
   relay:
-    image: "${PROD_IMAGE:-ghcr.io/girino/saint-michaels-mirror/saint-michaels-mirror:1.0.0}"
+    image: "${PROD_IMAGE:-ghcr.io/girino/saint-michaels-mirror:latest}"
     restart: unless-stopped
     env_file: .env
     environment:

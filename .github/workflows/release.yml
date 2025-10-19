@@ -191,6 +191,10 @@ jobs:
           # Configure and deploy
           cp .env.example .env
           # Edit .env with your configuration
+          
+          # (Optional) Use specific release version instead of latest
+          echo "PROD_IMAGE=ghcr.io/girino/saint-michaels-mirror:${{ github.ref_name }}" >> .env
+          
           docker compose -f docker-compose.prod.yml up -d
           ```
           
@@ -324,7 +328,11 @@ jobs:
         ### Option 1: Docker Compose (Recommended)
         1. Extract this archive
         2. Copy `.env.example` to `.env` and configure your settings
-        3. Run with Docker Compose:
+        3. (Optional) Set specific image version in `.env`:
+           ```bash
+           echo "PROD_IMAGE=ghcr.io/girino/saint-michaels-mirror:${{ github.ref_name }}" >> .env
+           ```
+        4. Run with Docker Compose:
            ```bash
            docker compose -f docker-compose.prod.yml up -d
            ```
@@ -412,6 +420,7 @@ jobs:
         - `PUBLISH_REMOTES`: Comma-separated list of relays to forward published events to
         - `QUERY_REMOTES`: Comma-separated list of relays to query events from
         - `ADDR`: Address to listen on (default: :3337)
+        - `PROD_IMAGE`: Docker image to use (defaults to latest if not set)
         
         ## Quick Start
         
@@ -424,6 +433,9 @@ jobs:
         # Configure
         cp .env.example .env
         # Edit .env with your settings
+        
+        # (Optional) Use specific release version instead of latest
+        echo "PROD_IMAGE=ghcr.io/girino/saint-michaels-mirror:${{ github.ref_name }}" >> .env
         
         # Deploy
         docker compose -f docker-compose.prod.yml up -d
