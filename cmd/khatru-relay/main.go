@@ -7,8 +7,10 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/fiatjaf/khatru"
 	"github.com/girino/relay-agregator/relaystore"
@@ -18,6 +20,9 @@ import (
 )
 
 func main() {
+	// Track start time for uptime calculation
+	startTime := time.Now()
+
 	// use LoadConfig to read env/flags
 	cfg := LoadConfig()
 
@@ -151,7 +156,42 @@ func main() {
 	// expose stats endpoint using the relay's router
 	mux := r.Router()
 	mux.HandleFunc("/stats", func(w http.ResponseWriter, req *http.Request) {
-		stats := rs.Stats()
+		// Get relaystore stats
+		relayStats := rs.Stats()
+
+		// Get runtime stats
+		var m runtime.MemStats
+		runtime.ReadMemStats(&m)
+
+		// Build comprehensive stats response
+		stats := map[string]interface{}{
+			// Relay store stats
+			"relay": relayStats,
+
+			// Application runtime stats
+			"app": map[string]interface{}{
+				"version":    Version,
+				"uptime":     time.Since(startTime).Seconds(),
+				"goroutines": runtime.NumGoroutine(),
+				"memory": map[string]interface{}{
+					"alloc_bytes":       m.Alloc,
+					"total_alloc_bytes": m.TotalAlloc,
+					"sys_bytes":         m.Sys,
+					"heap_alloc_bytes":  m.HeapAlloc,
+					"heap_sys_bytes":    m.HeapSys,
+					"heap_idle_bytes":   m.HeapIdle,
+					"heap_inuse_bytes":  m.HeapInuse,
+					"gc_cycles":         m.NumGC,
+					"gc_pause_ns":       m.PauseTotalNs,
+				},
+				"gc": map[string]interface{}{
+					"cycles":     m.NumGC,
+					"pause_ns":   m.PauseTotalNs,
+					"next_gc_ns": m.NextGC,
+				},
+			},
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(stats); err != nil {
 			http.Error(w, "failed to encode stats", http.StatusInternalServerError)
