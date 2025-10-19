@@ -155,7 +155,7 @@ func main() {
 
 	// expose stats endpoint using the relay's router
 	mux := r.Router()
-	mux.HandleFunc("/stats", func(w http.ResponseWriter, req *http.Request) {
+	mux.HandleFunc("/api/v1/stats", func(w http.ResponseWriter, req *http.Request) {
 		// Get relaystore stats
 		relayStats := rs.Stats()
 
