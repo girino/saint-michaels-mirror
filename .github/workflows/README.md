@@ -76,9 +76,12 @@ Images are published to: `ghcr.io/girino/saint-michaels-mirror`
 
 ### Release Assets
 Each release includes:
-- Individual binary files for each platform
-- Combined archive with all binaries
-- SHA256 checksums for verification
+- **Complete Archives**: Ready-to-use packages with binaries, static files, templates, and configuration
+  - `saint-michaels-mirror-vX.X.X-complete.tar.gz` (Linux/macOS)
+  - `saint-michaels-mirror-vX.X.X-complete.zip` (Windows)
+- **Individual Binaries**: Platform-specific executable files
+- **SHA256 Checksums**: For verification of all files
+- **README**: Comprehensive setup instructions included in archives
 
 ### Usage
 
