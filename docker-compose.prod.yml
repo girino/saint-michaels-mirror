@@ -26,16 +26,17 @@ services:
       start_period: 40s
 
   tor:
-    # example Tor proxy image — you may replace this with a preferred image
-    image: dperson/torproxy:latest
+    # Tor proxy image for hidden services
+    image: goldy/tor-hidden-service:latest
     restart: unless-stopped
     cap_add:
       - NET_ADMIN
     # Persist tor data (hidden service keys)
     volumes:
       - tor_data:/var/lib/tor
-    # map a hidden service port 80 to relay:3337; adjust flags for your tor image if different
-    command: ["-s", "80:relay:3337", "-P", "9050"]
+    # Environment variables for hidden service configuration
+    environment:
+      - TOR_SERVICE_HOSTS=80:relay:3337
     networks:
       - proxy_net
     healthcheck:
