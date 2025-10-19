@@ -3,12 +3,16 @@ package main
 import (
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/fiatjaf/eventstore/slicestore"
 	"github.com/fiatjaf/khatru"
@@ -196,6 +200,7 @@ func main() {
 				SoftwareHref   string
 				SoftwareIsLink bool
 				SupportedNIPs  []any
+				NipDescs       map[string]string
 				Software       string
 				Version        string
 				Icon           string
@@ -212,6 +217,7 @@ func main() {
 				SoftwareHref:   "",
 				SoftwareIsLink: false,
 				SupportedNIPs:  r.Info.SupportedNIPs,
+				NipDescs:       map[string]string{},
 				Software:       r.Info.Software,
 				Version:        r.Info.Version,
 				Icon:           r.Info.Icon,
@@ -275,6 +281,7 @@ func main() {
 		} else {
 			log.Fatalf("invalid addr: %v", err)
 		}
+
 	}
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
@@ -285,6 +292,67 @@ func main() {
 	if err := r.Start(host, port); err != nil {
 		log.Fatalf("relay exited: %v", err)
 	}
+}
+
+// simple in-memory cache for NIP descriptions (key: zero-padded two-digit string e.g. "01")
+var nipDescCache = map[string]string{}
+var nipDescMu sync.RWMutex
+
+// fetchNipDescription returns a short description for the given NIP by
+// fetching the markdown file from the nostr-protocol/nips repository's raw
+// content and extracting the first paragraph. The result is cached in-memory.
+func fetchNipDescription(n int) string {
+	key := fmt.Sprintf("%02d", n)
+	nipDescMu.RLock()
+	if v, ok := nipDescCache[key]; ok {
+		nipDescMu.RUnlock()
+		return v
+	}
+	nipDescMu.RUnlock()
+
+	// build raw URL
+	url := fmt.Sprintf("https://raw.githubusercontent.com/nostr-protocol/nips/master/%s.md", key)
+	client := &http.Client{Timeout: 4 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return ""
+	}
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return ""
+	}
+	s := string(b)
+	// extract first non-empty paragraph that is not a title
+	lines := strings.Split(s, "\n")
+	var acc []string
+	for _, L := range lines {
+		t := strings.TrimSpace(L)
+		if t == "" {
+			if len(acc) > 0 {
+				break
+			}
+			continue
+		}
+		// skip headings
+		if strings.HasPrefix(t, "#") {
+			continue
+		}
+		// accumulate until blank line
+		acc = append(acc, t)
+	}
+	desc := strings.Join(acc, " ")
+	// truncate to reasonable length
+	if len(desc) > 300 {
+		desc = desc[:297] + "..."
+	}
+	nipDescMu.Lock()
+	nipDescCache[key] = desc
+	nipDescMu.Unlock()
+	return desc
 }
 
 func ensureSupportedNip11(r *khatru.Relay) {
