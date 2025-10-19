@@ -347,9 +347,68 @@ func (r *RelayStore) ReplaceEvent(ctx context.Context, evt *nostr.Event) error {
 	return r.SaveEvent(ctx, evt)
 }
 
-// CountEvents returns 0 because we don't store anything.
+// CountEvents forwards the filter to query remotes and returns the total number
+// of matching events observed. It follows the same short-circuit rules as
+// QueryEvents: internal khatru calls and the exact adding.go kind=5/#e
+// short-circuit (when ctx.Value(1) == nil) are not forwarded.
 func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int64, error) {
-	return 0, nil
+	// count total requests
+	atomic.AddInt64(&r.queryRequests, 1)
+
+	// short-circuit khatru internal calls
+	if khatru.IsInternalCall(ctx) {
+		atomic.AddInt64(&r.queryInternal, 1)
+		if r.Verbose {
+			log.Printf("[relaystore][DEBUG] internal count short-circuited (khatru internal call) filter=%+v", filter)
+		}
+		return 0, nil
+	}
+
+	// same adding.go special-case as QueryEvents
+	if isAddingKind5Filter(filter) && ctx.Value(1) == nil {
+		atomic.AddInt64(&r.queryInternal, 1)
+		if r.Verbose {
+			log.Printf("[relaystore][DEBUG] internal count short-circuited (adding.go kind=5 #e, no ctx[1]) filter=%+v", filter)
+		}
+		return 0, nil
+	}
+
+	atomic.AddInt64(&r.queryExternal, 1)
+
+	if r.pool == nil {
+		if r.Verbose {
+			log.Printf("[relaystore][DEBUG] CountEvents called but no pool initialized (khatru_internal_call=%v) filter=%+v", khatru.IsInternalCall(ctx), filter)
+		}
+		return 0, nil
+	}
+
+	if r.Verbose {
+		log.Printf("[relaystore][DEBUG] CountEvents called (khatru_internal_call=%v) filter=%+v", khatru.IsInternalCall(ctx), filter)
+	}
+
+	// ensure relays and count failures
+	for _, q := range r.queryUrls {
+		if q == "" {
+			continue
+		}
+		if _, err := r.pool.EnsureRelay(q); err != nil {
+			atomic.AddInt64(&r.queryFailures, 1)
+			if r.Verbose {
+				log.Printf("[relaystore][WARN] failed to ensure query relay %s: %v", q, err)
+			}
+		}
+	}
+
+	evch := r.pool.FetchMany(ctx, r.queryUrls, filter)
+	var cnt int64
+	for ie := range evch {
+		if ie.Event != nil {
+			atomic.AddInt64(&r.queryEventsReturned, 1)
+			cnt++
+		}
+	}
+
+	return cnt, nil
 }
 
 // Ensure RelayStore implements eventstore.Store and eventstore.Counter
