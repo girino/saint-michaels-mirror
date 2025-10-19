@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Monoline glyph icon: single stroke antenna/waves on circular badge -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-labelledby="title">
+  <title id="title">Relay monoline glyph</title>
+  <rect width="1024" height="1024" rx="160" fill="#0f1113"/>
+  <g transform="translate(160,160)">
+    <circle cx="352" cy="352" r="320" fill="none" stroke="#ffd166" stroke-width="48"/>
+    <g transform="translate(352,280)" stroke="#ffd166" stroke-width="36" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <path d="M0 48v160"/>
+      <path d="M-144 56c32-32 80-56 144-56s112 24 144 56"/>
+      <path d="M-192 56c44-44 112-80 192-80s148 36 192 80"/>
+    </g>
+  </g>
+</svg>
