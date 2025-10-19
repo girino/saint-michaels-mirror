@@ -16,7 +16,10 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 
 # Final minimal image
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+# Install ca-certificates and curl for healthchecks and basic networking
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
 RUN useradd -m -u 1000 relayuser
