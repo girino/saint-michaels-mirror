@@ -29,6 +29,11 @@
     .nips{display:flex;gap:8px;flex-wrap:wrap}
     .nip{background:rgba(255,255,255,0.04);padding:6px 8px;border-radius:6px;color:var(--accent);font-weight:600}
     a.pill{display:inline-block;padding:6px 10px;border-radius:8px;background:var(--accent);color:#000;text-decoration:none;font-weight:700}
+    /* foldable sections layout */
+    .foldables{display:grid;grid-template-columns:1fr;gap:12px;margin-top:18px}
+    @media(min-width:900px){
+      .foldables{grid-template-columns:1fr 1fr}
+    }
   </style>
 </head>
 <body>
@@ -77,7 +82,8 @@
       </div>
     </div>
 
-    <section style="margin-top:18px" class="card">
+  <div class="foldables">
+  <section style="margin-top:18px" class="card">
       <div class="k">Full NIP-11 JSON</div>
       <details id="nip11-details">
         <summary style="cursor:pointer">Show NIP-11 JSON</summary>
@@ -98,9 +104,9 @@
           }
         });
       </script>
-    </section>
+  </section>
 
-    <section style="margin-top:12px" class="card">
+  <section style="margin-top:12px" class="card">
       <div class="k">Relay Stats</div>
       <details id="stats-details">
         <summary style="cursor:pointer">Show stats</summary>
@@ -121,7 +127,8 @@
           }
         });
       </script>
-    </section>
+  </section>
+  </div>
 
     <footer>
       <div>Powered by khatru — NIP-11 relay info shown above.</div>
