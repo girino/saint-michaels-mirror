@@ -35,11 +35,14 @@ This directory contains GitHub Actions workflows for automated CI/CD, testing, a
 
 ### 4. Release (`release.yml`)
 - **Trigger**: Push tags matching `v*` pattern
-- **Purpose**: Create GitHub releases with Docker images
+- **Purpose**: Create GitHub releases with Docker images and binary executables
 - **Actions**:
-  - Build and push release Docker images
+  - Build and push release Docker images (multi-architecture)
+  - Build binary executables for multiple platforms (Linux, macOS, Windows)
+  - Generate SHA256 checksums for all binaries
   - Generate changelog from git commits
-  - Create GitHub release with changelog
+  - Create GitHub release with changelog and binary downloads
+  - Upload individual binaries and archive to release assets
   - Tag images with version numbers
 
 ### 5. Security (`security.yml`)
@@ -63,9 +66,22 @@ Images are published to: `ghcr.io/girino/saint-michaels-mirror`
 - `main` - Latest main branch build
 - `pr-123` - Pull request builds
 
+## Binary Executables
+
+### Supported Platforms
+- **Linux**: AMD64, ARM64
+- **macOS**: AMD64, ARM64 (Apple Silicon)
+- **Windows**: AMD64, ARM64
+
+### Release Assets
+Each release includes:
+- Individual binary files for each platform
+- Combined archive with all binaries
+- SHA256 checksums for verification
+
 ### Usage
 
-#### Latest Release
+#### Docker (Latest Release)
 ```bash
 docker run -d \
   --name saint-michaels-mirror \
@@ -74,13 +90,41 @@ docker run -d \
   ghcr.io/girino/saint-michaels-mirror:latest
 ```
 
-#### Specific Version
+#### Docker (Specific Version)
 ```bash
 docker run -d \
   --name saint-michaels-mirror \
   -p 3337:3337 \
   -e RELAY_NAME="Your Relay Name" \
   ghcr.io/girino/saint-michaels-mirror:v1.0.0
+```
+
+#### Binary (Linux)
+```bash
+# Download the appropriate binary for your platform
+wget https://github.com/girino/saint-michaels-mirror/releases/download/v1.0.0/saint-michaels-mirror-linux-amd64
+chmod +x saint-michaels-mirror-linux-amd64
+
+# Run with environment variables
+RELAY_NAME="Your Relay Name" ./saint-michaels-mirror-linux-amd64 --addr=:3337
+```
+
+#### Binary (macOS)
+```bash
+# Download for Apple Silicon
+wget https://github.com/girino/saint-michaels-mirror/releases/download/v1.0.0/saint-michaels-mirror-darwin-arm64
+chmod +x saint-michaels-mirror-darwin-arm64
+RELAY_NAME="Your Relay Name" ./saint-michaels-mirror-darwin-arm64 --addr=:3337
+```
+
+#### Binary (Windows)
+```cmd
+# Download the Windows binary
+curl -LO https://github.com/girino/saint-michaels-mirror/releases/download/v1.0.0/saint-michaels-mirror-windows-amd64.exe
+
+# Run with environment variables
+set RELAY_NAME=Your Relay Name
+saint-michaels-mirror-windows-amd64.exe --addr=:3337
 ```
 
 ## Environment Variables
