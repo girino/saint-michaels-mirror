@@ -18,6 +18,12 @@ services:
       - "3337"
     networks:
       - proxy_net
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3337/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   tor:
     # example Tor proxy image — you may replace this with a preferred image
@@ -30,6 +36,27 @@ services:
       - tor_data:/var/lib/tor
     # map a hidden service port 80 to relay:3337; adjust flags for your tor image if different
     command: -s 80:relay:3337 -P 9050
+    networks:
+      - proxy_net
+    healthcheck:
+      # Test Tor connectivity by checking Tor Project API
+      # 1. Hidden service hostname file exists
+      # 2. Test actual Tor connectivity using torsocks + wget
+      test: ["CMD", "sh", "-c", "test -f /var/lib/tor/hidden_service/relay/hostname && torsocks wget -q -O - https://check.torproject.org/api/ip | grep -q '\"IsTor\":true'"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 90s
+
+  autoheal:
+    image: willfarrell/autoheal:latest
+    restart: unless-stopped
+    container_name: autoheal
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=all
+      - AUTOHEAL_INTERVAL=30
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - proxy_net
 

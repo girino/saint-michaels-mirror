@@ -159,6 +159,20 @@ func main() {
 		r.StoreEvent = append(r.StoreEvent, s.SaveEvent)
 		r.QueryEvents = append(r.QueryEvents, s.QueryEvents)
 		r.CountEvents = append(r.CountEvents, s.CountEvents)
+		// expose health endpoint for docker healthchecks
+		mux := r.Router()
+		mux.HandleFunc("/health", func(w http.ResponseWriter, req *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			health := map[string]interface{}{
+				"status":  "healthy",
+				"service": "khatru-relay",
+				"version": Version,
+			}
+			if err := json.NewEncoder(w).Encode(health); err != nil {
+				http.Error(w, "failed to encode health status", http.StatusInternalServerError)
+				return
+			}
+		})
 	case *relaystore.RelayStore:
 		r.StoreEvent = append(r.StoreEvent, s.SaveEvent)
 		r.QueryEvents = append(r.QueryEvents, s.QueryEvents)
@@ -170,6 +184,20 @@ func main() {
 			w.Header().Set("Content-Type", "application/json")
 			if err := json.NewEncoder(w).Encode(stats); err != nil {
 				http.Error(w, "failed to encode stats", http.StatusInternalServerError)
+				return
+			}
+		})
+
+		// expose health endpoint for docker healthchecks
+		mux.HandleFunc("/health", func(w http.ResponseWriter, req *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			health := map[string]interface{}{
+				"status":  "healthy",
+				"service": "khatru-relay",
+				"version": Version,
+			}
+			if err := json.NewEncoder(w).Encode(health); err != nil {
+				http.Error(w, "failed to encode health status", http.StatusInternalServerError)
 				return
 			}
 		})
