@@ -2,19 +2,19 @@ version: '3.8'
 services:
   relay:
     build: .
-    image: girino/khatru-relay:rc2
-    container_name: khatru-relay
+    image: "${IMAGE_NAME:-girino/khatru-relay:rc2}"
+    container_name: "${CONTAINER_NAME:-khatru-relay}"
     restart: unless-stopped
+    # Load variables from .env in repo root; docker-compose also reads .env automatically,
+    # but specifying env_file keeps intent explicit and works for some CI setups.
+    env_file: .env
     environment:
-      - RELAY_PORT=8080
-      - RELAY_NAME=Espelho de São Miguel
+      RELAY_PORT: "${RELAY_PORT:-3337}"
+      RELAY_NAME: "${RELAY_NAME:-Espelho de São Miguel}"
     ports:
-      - "8080:8080" # HTTP/NIP-11/homepage
-    volumes:
-      - ./config:/etc/khatru-relay:ro
-      - ./data:/var/lib/khatru-relay
+      - "${RELAY_PORT:-3337}:${RELAY_PORT:-3337}" # HTTP/NIP-11/homepage
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/ || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:${RELAY_PORT:-3337}/ || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
