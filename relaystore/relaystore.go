@@ -399,16 +399,12 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 		}
 	}
 
-	evch := r.pool.FetchMany(ctx, r.queryUrls, filter)
-	var cnt int64
-	for ie := range evch {
-		if ie.Event != nil {
-			atomic.AddInt64(&r.queryEventsReturned, 1)
-			cnt++
-		}
+	// use CountMany which aggregates counts across relays (NIP-45 HyperLogLog)
+	cnt := r.pool.CountMany(ctx, r.queryUrls, filter, nil)
+	if cnt > 0 {
+		atomic.AddInt64(&r.queryEventsReturned, int64(cnt))
 	}
-
-	return cnt, nil
+	return int64(cnt), nil
 }
 
 // Ensure RelayStore implements eventstore.Store and eventstore.Counter
