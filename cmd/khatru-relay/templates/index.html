@@ -80,7 +80,7 @@
       <div class="card">
         <div class="k">Supported NIPs</div>
         <div class="nips">
-          {{range .SupportedNIPs}}<div class="nip"><a class="v" href="https://nostr-nips.com/nip-{{.}}" target="_blank" rel="noopener">NIP-{{.}}</a></div>{{end}}
+          {{range .SupportedNIPs}}<a class="nip" href="https://nostr-nips.com/nip-{{printf "%02d" .}}" target="_blank" rel="noopener">NIP-{{printf "%02d" .}}</a>{{end}}
         </div>
       </div>
       <div class="card">
