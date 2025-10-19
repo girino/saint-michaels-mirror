@@ -243,6 +243,94 @@ func main() {
 		}
 	})
 
+	// Define view model struct for templates
+	type ViewModel struct {
+		Name           string
+		Description    string
+		PubKey         string
+		PubKeyNPub     string
+		Contact        string
+		ContactHref    string
+		ContactIsLink  bool
+		SoftwareHref   string
+		SoftwareIsLink bool
+		SupportedNIPs  []any
+		Software       string
+		Version        string
+		Icon           string
+		Banner         string
+		ServiceURL     string
+	}
+
+	// buildViewModel creates a view model from relay info
+	buildViewModel := func() ViewModel {
+		vm := ViewModel{
+			Name:           r.Info.Name,
+			Description:    r.Info.Description,
+			PubKey:         r.Info.PubKey,
+			PubKeyNPub:     "",
+			Contact:        r.Info.Contact,
+			ContactHref:    "",
+			ContactIsLink:  false,
+			SoftwareHref:   "",
+			SoftwareIsLink: false,
+			SupportedNIPs:  r.Info.SupportedNIPs,
+			Software:       r.Info.Software,
+			Version:        r.Info.Version,
+			Icon:           r.Info.Icon,
+			Banner:         r.Info.Banner,
+			ServiceURL:     r.ServiceURL,
+		}
+
+		// compute contact link if it's an email or nostr nip19 pub/profile
+		if vm.Contact == "" && vm.PubKey != "" {
+			// expose pubkey as npub contact when none provided
+			if npub, err := nip19.EncodePublicKey(vm.PubKey); err == nil && npub != "" {
+				vm.Contact = npub
+			}
+		}
+
+		// compute npub for explicit display
+		if vm.PubKey != "" {
+			if npub, err := nip19.EncodePublicKey(vm.PubKey); err == nil && npub != "" {
+				vm.PubKeyNPub = npub
+			}
+		}
+
+		if vm.Contact != "" {
+			c := strings.TrimSpace(vm.Contact)
+			// npub / nprofile
+			if strings.HasPrefix(c, "npub") || strings.HasPrefix(c, "nprofile") {
+				vm.ContactHref = "https://njump.me/" + c
+				vm.ContactIsLink = true
+			} else if strings.Contains(c, "@") && !strings.Contains(c, " ") {
+				// treat as email
+				vm.ContactHref = "mailto:" + c
+				vm.ContactIsLink = true
+			}
+		}
+
+		// software link detection (http/https)
+		if vm.Software != "" {
+			s := strings.TrimSpace(vm.Software)
+			if strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://") {
+				vm.SoftwareHref = s
+				vm.SoftwareIsLink = true
+			}
+		}
+
+		return vm
+	}
+
+	// renderTemplate is a helper function to render templates with error handling
+	renderTemplate := func(w http.ResponseWriter, tpl *template.Template, vm ViewModel, pageName string) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := tpl.Execute(w, vm); err != nil {
+			http.Error(w, "template render error", http.StatusInternalServerError)
+			log.Printf("%s template execute error: %v", pageName, err)
+		}
+	}
+
 	// khatru will serve NIP-11 itself; we only expose metrics here.
 	// parse the HTML template once and serve it with r.Info as data
 	tplPath := "cmd/saint-michaels-mirror/templates/index.html"
@@ -252,83 +340,8 @@ func main() {
 	}
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		// build a minimal view model expected by the template
-		vm := struct {
-			Name           string
-			Description    string
-			PubKey         string
-			PubKeyNPub     string
-			Contact        string
-			ContactHref    string
-			ContactIsLink  bool
-			SoftwareHref   string
-			SoftwareIsLink bool
-			SupportedNIPs  []any
-			Software       string
-			Version        string
-			Icon           string
-			Banner         string
-			ServiceURL     string
-		}{
-			Name:           r.Info.Name,
-			Description:    r.Info.Description,
-			PubKey:         r.Info.PubKey,
-			PubKeyNPub:     "",
-			Contact:        r.Info.Contact,
-			ContactHref:    "",
-			ContactIsLink:  false,
-			SoftwareHref:   "",
-			SoftwareIsLink: false,
-			SupportedNIPs:  r.Info.SupportedNIPs,
-			Software:       r.Info.Software,
-			Version:        r.Info.Version,
-			Icon:           r.Info.Icon,
-			Banner:         r.Info.Banner,
-			ServiceURL:     r.ServiceURL,
-		}
-
-		// compute contact link if it's an email or nostr nip19 pub/profile
-		if vm.Contact == "" && vm.PubKey != "" {
-			// expose pubkey as npub contact when none provided
-			if npub, err := nip19.EncodePublicKey(vm.PubKey); err == nil && npub != "" {
-				vm.Contact = npub
-			}
-		}
-
-		// compute npub for explicit display
-		if vm.PubKey != "" {
-			if npub, err := nip19.EncodePublicKey(vm.PubKey); err == nil && npub != "" {
-				vm.PubKeyNPub = npub
-			}
-		}
-
-		if vm.Contact != "" {
-			c := strings.TrimSpace(vm.Contact)
-			// npub / nprofile
-			if strings.HasPrefix(c, "npub") || strings.HasPrefix(c, "nprofile") {
-				vm.ContactHref = "https://njump.me/" + c
-				vm.ContactIsLink = true
-			} else if strings.Contains(c, "@") && !strings.Contains(c, " ") {
-				// treat as email
-				vm.ContactHref = "mailto:" + c
-				vm.ContactIsLink = true
-			}
-		}
-
-		// software link detection (http/https)
-		if vm.Software != "" {
-			s := strings.TrimSpace(vm.Software)
-			if strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://") {
-				vm.SoftwareHref = s
-				vm.SoftwareIsLink = true
-			}
-		}
-
-		if err := tpl.Execute(w, vm); err != nil {
-			http.Error(w, "template render error", http.StatusInternalServerError)
-			log.Printf("template execute error: %v", err)
-		}
+		vm := buildViewModel()
+		renderTemplate(w, tpl, vm, "main")
 	})
 
 	// serve stats page
@@ -338,83 +351,8 @@ func main() {
 		log.Fatalf("failed to parse stats template %s: %v", statsTplPath, err)
 	}
 	mux.HandleFunc("/stats", func(w http.ResponseWriter, req *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		// build a minimal view model expected by the template
-		vm := struct {
-			Name           string
-			Description    string
-			PubKey         string
-			PubKeyNPub     string
-			Contact        string
-			ContactHref    string
-			ContactIsLink  bool
-			SoftwareHref   string
-			SoftwareIsLink bool
-			SupportedNIPs  []any
-			Software       string
-			Version        string
-			Icon           string
-			Banner         string
-			ServiceURL     string
-		}{
-			Name:           r.Info.Name,
-			Description:    r.Info.Description,
-			PubKey:         r.Info.PubKey,
-			PubKeyNPub:     "",
-			Contact:        r.Info.Contact,
-			ContactHref:    "",
-			ContactIsLink:  false,
-			SoftwareHref:   "",
-			SoftwareIsLink: false,
-			SupportedNIPs:  r.Info.SupportedNIPs,
-			Software:       r.Info.Software,
-			Version:        r.Info.Version,
-			Icon:           r.Info.Icon,
-			Banner:         r.Info.Banner,
-			ServiceURL:     r.ServiceURL,
-		}
-
-		// compute contact link if it's an email or nostr nip19 pub/profile
-		if vm.Contact == "" && vm.PubKey != "" {
-			// expose pubkey as npub contact when none provided
-			if npub, err := nip19.EncodePublicKey(vm.PubKey); err == nil && npub != "" {
-				vm.Contact = npub
-			}
-		}
-
-		// compute npub for explicit display
-		if vm.PubKey != "" {
-			if npub, err := nip19.EncodePublicKey(vm.PubKey); err == nil && npub != "" {
-				vm.PubKeyNPub = npub
-			}
-		}
-
-		if vm.Contact != "" {
-			c := strings.TrimSpace(vm.Contact)
-			// npub / nprofile
-			if strings.HasPrefix(c, "npub") || strings.HasPrefix(c, "nprofile") {
-				vm.ContactHref = "https://njump.me/" + c
-				vm.ContactIsLink = true
-			} else if strings.Contains(c, "@") && !strings.Contains(c, " ") {
-				// treat as email
-				vm.ContactHref = "mailto:" + c
-				vm.ContactIsLink = true
-			}
-		}
-
-		// software link detection (http/https)
-		if vm.Software != "" {
-			s := strings.TrimSpace(vm.Software)
-			if strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://") {
-				vm.SoftwareHref = s
-				vm.SoftwareIsLink = true
-			}
-		}
-
-		if err := statsTpl.Execute(w, vm); err != nil {
-			http.Error(w, "template render error", http.StatusInternalServerError)
-			log.Printf("stats template execute error: %v", err)
-		}
+		vm := buildViewModel()
+		renderTemplate(w, statsTpl, vm, "stats")
 	})
 
 	// serve health page
@@ -424,83 +362,8 @@ func main() {
 		log.Fatalf("failed to parse health template %s: %v", healthTplPath, err)
 	}
 	mux.HandleFunc("/health", func(w http.ResponseWriter, req *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		// build a minimal view model expected by the template
-		vm := struct {
-			Name           string
-			Description    string
-			PubKey         string
-			PubKeyNPub     string
-			Contact        string
-			ContactHref    string
-			ContactIsLink  bool
-			SoftwareHref   string
-			SoftwareIsLink bool
-			SupportedNIPs  []any
-			Software       string
-			Version        string
-			Icon           string
-			Banner         string
-			ServiceURL     string
-		}{
-			Name:           r.Info.Name,
-			Description:    r.Info.Description,
-			PubKey:         r.Info.PubKey,
-			PubKeyNPub:     "",
-			Contact:        r.Info.Contact,
-			ContactHref:    "",
-			ContactIsLink:  false,
-			SoftwareHref:   "",
-			SoftwareIsLink: false,
-			SupportedNIPs:  r.Info.SupportedNIPs,
-			Software:       r.Info.Software,
-			Version:        r.Info.Version,
-			Icon:           r.Info.Icon,
-			Banner:         r.Info.Banner,
-			ServiceURL:     r.ServiceURL,
-		}
-
-		// compute contact link if it's an email or nostr nip19 pub/profile
-		if vm.Contact == "" && vm.PubKey != "" {
-			// expose pubkey as npub contact when none provided
-			if npub, err := nip19.EncodePublicKey(vm.PubKey); err == nil && npub != "" {
-				vm.Contact = npub
-			}
-		}
-
-		// compute npub for explicit display
-		if vm.PubKey != "" {
-			if npub, err := nip19.EncodePublicKey(vm.PubKey); err == nil && npub != "" {
-				vm.PubKeyNPub = npub
-			}
-		}
-
-		if vm.Contact != "" {
-			c := strings.TrimSpace(vm.Contact)
-			// npub / nprofile
-			if strings.HasPrefix(c, "npub") || strings.HasPrefix(c, "nprofile") {
-				vm.ContactHref = "https://njump.me/" + c
-				vm.ContactIsLink = true
-			} else if strings.Contains(c, "@") && !strings.Contains(c, " ") {
-				// treat as email
-				vm.ContactHref = "mailto:" + c
-				vm.ContactIsLink = true
-			}
-		}
-
-		// software link detection (http/https)
-		if vm.Software != "" {
-			s := strings.TrimSpace(vm.Software)
-			if strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://") {
-				vm.SoftwareHref = s
-				vm.SoftwareIsLink = true
-			}
-		}
-
-		if err := healthTpl.Execute(w, vm); err != nil {
-			http.Error(w, "template render error", http.StatusInternalServerError)
-			log.Printf("health template execute error: %v", err)
-		}
+		vm := buildViewModel()
+		renderTemplate(w, healthTpl, vm, "health")
 	})
 
 	// serve static assets (icon/banner) from ./cmd/saint-michaels-mirror/static
