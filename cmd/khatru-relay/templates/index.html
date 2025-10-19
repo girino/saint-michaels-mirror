@@ -83,7 +83,7 @@
       <script>
         (async function(){
           try{
-            const resp = await fetch('/', { headers: { 'Accept': 'application/nostr+json,application/json' } });
+            const resp = await fetch('/', { headers: { 'Accept': 'application/nostr+json' } });
             if(!resp.ok) throw new Error('failed to fetch');
             const data = await resp.json();
             const pretty = JSON.stringify(data, null, 2);
