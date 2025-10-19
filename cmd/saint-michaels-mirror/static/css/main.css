@@ -94,6 +94,106 @@ footer a:hover {
   color: var(--accent-2);
 }
 
+/* Stats and Health page specific styles */
+.stat-item, .health-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.stat-item:last-child, .health-item:last-child {
+  border-bottom: none;
+}
+
+.stat-label, .health-label {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.stat-value, .health-value {
+  color: var(--white);
+  font-weight: 500;
+}
+
+.health-indicator {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.health-green {
+  background: #22c55e;
+  color: #000;
+}
+
+.health-yellow {
+  background: #eab308;
+  color: #000;
+}
+
+.health-red {
+  background: #ef4444;
+  color: #fff;
+}
+
+.status-healthy {
+  background: #22c55e;
+  color: #000;
+}
+
+.status-degraded {
+  background: #eab308;
+  color: #000;
+}
+
+.status-unhealthy {
+  background: #ef4444;
+  color: #fff;
+}
+
+.loading {
+  text-align: center;
+  color: var(--muted);
+  padding: 20px;
+}
+
+.error {
+  text-align: center;
+  color: #ef4444;
+  padding: 20px;
+}
+
+.refresh-info {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-top: 16px;
+}
+
+.overall-status {
+  text-align: center;
+  margin: 20px 0;
+  padding: 20px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+  border: 1px solid rgba(255,255,255,0.03);
+}
+
+.overall-status h2 {
+  margin: 0 0 8px 0;
+  font-size: 1.5rem;
+}
+
+.overall-status p {
+  margin: 0;
+  color: var(--muted);
+}
+
 .nips{
   display:flex;
   gap:8px;
