@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/favicons/favicon-16x16.png">
+  <link rel="icon" type="image/png" sizes="48x48" href="/static/favicons/favicon-48x48.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/favicons/favicon-180x180.png">
+  <title>Health — Espelho de São Miguel</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+  <style>
+    .health-container {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      margin-top: 20px;
+    }
+    @media(min-width: 768px) {
+      .health-container {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+    .health-card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+      padding: 16px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.03);
+    }
+    .health-title {
+      color: var(--accent);
+      font-weight: 600;
+      font-size: 1.1rem;
+      margin-bottom: 12px;
+    }
+    .health-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .health-item:last-child {
+      border-bottom: none;
+    }
+    .health-label {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .health-value {
+      color: var(--white);
+      font-weight: 500;
+    }
+    .health-indicator {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .health-green {
+      background: #22c55e;
+      color: #000;
+    }
+    .health-yellow {
+      background: #eab308;
+      color: #000;
+    }
+    .health-red {
+      background: #ef4444;
+      color: #fff;
+    }
+    .status-healthy {
+      background: #22c55e;
+      color: #000;
+    }
+    .status-degraded {
+      background: #eab308;
+      color: #000;
+    }
+    .status-unhealthy {
+      background: #ef4444;
+      color: #fff;
+    }
+    .loading {
+      text-align: center;
+      color: var(--muted);
+      padding: 20px;
+    }
+    .error {
+      text-align: center;
+      color: #ef4444;
+      padding: 20px;
+    }
+    .refresh-info {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.8rem;
+      margin-top: 16px;
+    }
+    .back-link {
+      display: inline-block;
+      margin-bottom: 16px;
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .back-link:hover {
+      color: var(--accent-2);
+    }
+    .overall-status {
+      text-align: center;
+      margin: 20px 0;
+      padding: 20px;
+      border-radius: 8px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+      border: 1px solid rgba(255,255,255,0.03);
+    }
+    .overall-status h2 {
+      margin: 0 0 8px 0;
+      font-size: 1.5rem;
+    }
+    .overall-status p {
+      margin: 0;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a href="/" class="back-link">← Back to Relay Info</a>
+    <header>
+      <div class="logo">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="24" height="24" rx="4" fill="var(--accent)"/>
+          <path d="M6 12h12M6 8h12M6 16h8" stroke="#000" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div style="flex:1">
+        <h1>Health Status</h1>
+        <p class="lead">System health monitoring for Espelho de São Miguel</p>
+      </div>
+    </header>
+
+    <div id="overall-status" class="overall-status">
+      <div class="loading">Loading health status...</div>
+    </div>
+
+    <div id="health-content">
+      <div class="loading">Loading health details...</div>
+    </div>
+
+    <div class="refresh-info">
+      Auto-refreshes every 3 seconds • Last updated: <span id="last-updated">-</span>
+    </div>
+  </div>
+
+  <script>
+    let refreshInterval;
+
+    function getHealthClass(state) {
+      switch(state) {
+        case 'GREEN': return 'health-green';
+        case 'YELLOW': return 'health-yellow';
+        case 'RED': return 'health-red';
+        default: return 'health-green';
+      }
+    }
+
+    function getStatusClass(status) {
+      switch(status) {
+        case 'healthy': return 'status-healthy';
+        case 'degraded': return 'status-degraded';
+        case 'unhealthy': return 'status-unhealthy';
+        default: return 'status-healthy';
+      }
+    }
+
+    function updateLastUpdated() {
+      const now = new Date();
+      document.getElementById('last-updated').textContent = now.toLocaleTimeString();
+    }
+
+    async function loadHealth() {
+      try {
+        const response = await fetch('/api/v1/health');
+        if (!response.ok) throw new Error('Failed to fetch health status');
+        const data = await response.json();
+        
+        // Update overall status
+        const overallStatus = document.getElementById('overall-status');
+        overallStatus.innerHTML = `
+          <h2>
+            <span class="health-indicator ${getStatusClass(data.status)}">
+              ${data.status.toUpperCase()}
+            </span>
+          </h2>
+          <p>${data.service} v${data.version}</p>
+        `;
+
+        // Update health details
+        const content = document.getElementById('health-content');
+        content.innerHTML = `
+          <div class="health-container">
+            <div class="health-card">
+              <div class="health-title">Service Information</div>
+              <div class="health-item">
+                <span class="health-label">Service Name</span>
+                <span class="health-value">${data.service}</span>
+              </div>
+              <div class="health-item">
+                <span class="health-label">Version</span>
+                <span class="health-value">${data.version}</span>
+              </div>
+              <div class="health-item">
+                <span class="health-label">Overall Status</span>
+                <span class="health-value">
+                  <span class="health-indicator ${getStatusClass(data.status)}">
+                    ${data.status}
+                  </span>
+                </span>
+              </div>
+            </div>
+
+            <div class="health-card">
+              <div class="health-title">Health Indicators</div>
+              <div class="health-item">
+                <span class="health-label">Main Health State</span>
+                <span class="health-value">
+                  <span class="health-indicator ${getHealthClass(data.main_health_state)}">
+                    ${data.main_health_state}
+                  </span>
+                </span>
+              </div>
+              <div class="health-item">
+                <span class="health-label">Publish Health</span>
+                <span class="health-value">
+                  <span class="health-indicator ${getHealthClass(data.publish_health_state)}">
+                    ${data.publish_health_state}
+                  </span>
+                </span>
+              </div>
+              <div class="health-item">
+                <span class="health-label">Query Health</span>
+                <span class="health-value">
+                  <span class="health-indicator ${getHealthClass(data.query_health_state)}">
+                    ${data.query_health_state}
+                  </span>
+                </span>
+              </div>
+            </div>
+
+            <div class="health-card">
+              <div class="health-title">Failure Tracking</div>
+              <div class="health-item">
+                <span class="health-label">Consecutive Publish Failures</span>
+                <span class="health-value">${data.consecutive_publish_failures}</span>
+              </div>
+              <div class="health-item">
+                <span class="health-label">Consecutive Query Failures</span>
+                <span class="health-value">${data.consecutive_query_failures}</span>
+              </div>
+              <div class="health-item">
+                <span class="health-label">Failure Threshold</span>
+                <span class="health-value">10 failures</span>
+              </div>
+            </div>
+
+            <div class="health-card">
+              <div class="health-title">Health Legend</div>
+              <div class="health-item">
+                <span class="health-label">
+                  <span class="health-indicator health-green">GREEN</span>
+                </span>
+                <span class="health-value">No failures</span>
+              </div>
+              <div class="health-item">
+                <span class="health-label">
+                  <span class="health-indicator health-yellow">YELLOW</span>
+                </span>
+                <span class="health-value">1-9 failures</span>
+              </div>
+              <div class="health-item">
+                <span class="health-label">
+                  <span class="health-indicator health-red">RED</span>
+                </span>
+                <span class="health-value">10+ failures</span>
+              </div>
+            </div>
+          </div>
+        `;
+        
+        updateLastUpdated();
+      } catch (error) {
+        const overallStatus = document.getElementById('overall-status');
+        overallStatus.innerHTML = `
+          <h2>
+            <span class="health-indicator status-unhealthy">
+              ERROR
+            </span>
+          </h2>
+          <p>Failed to load health status</p>
+        `;
+        
+        const content = document.getElementById('health-content');
+        content.innerHTML = `<div class="error">Failed to load health status: ${error.message}</div>`;
+      }
+    }
+
+    // Load health immediately
+    loadHealth();
+
+    // Set up auto-refresh every 3 seconds
+    refreshInterval = setInterval(loadHealth, 3000);
+
+    // Clean up on page unload
+    window.addEventListener('beforeunload', () => {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
+    });
+  </script>
+</body>
+</html>

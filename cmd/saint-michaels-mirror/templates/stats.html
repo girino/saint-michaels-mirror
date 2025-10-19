@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/favicons/favicon-16x16.png">
+  <link rel="icon" type="image/png" sizes="48x48" href="/static/favicons/favicon-48x48.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/favicons/favicon-180x180.png">
+  <title>Stats — Espelho de São Miguel</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+  <style>
+    .stats-container {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      margin-top: 20px;
+    }
+    @media(min-width: 768px) {
+      .stats-container {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+    .stat-card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+      padding: 16px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.03);
+    }
+    .stat-title {
+      color: var(--accent);
+      font-weight: 600;
+      font-size: 1.1rem;
+      margin-bottom: 12px;
+    }
+    .stat-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .stat-item:last-child {
+      border-bottom: none;
+    }
+    .stat-label {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .stat-value {
+      color: var(--white);
+      font-weight: 500;
+    }
+    .health-indicator {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .health-green {
+      background: #22c55e;
+      color: #000;
+    }
+    .health-yellow {
+      background: #eab308;
+      color: #000;
+    }
+    .health-red {
+      background: #ef4444;
+      color: #fff;
+    }
+    .loading {
+      text-align: center;
+      color: var(--muted);
+      padding: 20px;
+    }
+    .error {
+      text-align: center;
+      color: #ef4444;
+      padding: 20px;
+    }
+    .refresh-info {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.8rem;
+      margin-top: 16px;
+    }
+    .back-link {
+      display: inline-block;
+      margin-bottom: 16px;
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .back-link:hover {
+      color: var(--accent-2);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a href="/" class="back-link">← Back to Relay Info</a>
+    <header>
+      <div class="logo">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="24" height="24" rx="4" fill="var(--accent)"/>
+          <path d="M6 12h12M6 8h12M6 16h8" stroke="#000" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div style="flex:1">
+        <h1>Relay Statistics</h1>
+        <p class="lead">Real-time performance metrics for Espelho de São Miguel</p>
+      </div>
+    </header>
+
+    <div id="stats-content">
+      <div class="loading">Loading statistics...</div>
+    </div>
+
+    <div class="refresh-info">
+      Auto-refreshes every 5 seconds • Last updated: <span id="last-updated">-</span>
+    </div>
+  </div>
+
+  <script>
+    let refreshInterval;
+
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    function formatDuration(ms) {
+      if (ms === 0) return '0 ms';
+      if (ms < 1000) return ms.toFixed(1) + ' ms';
+      return (ms / 1000).toFixed(2) + ' s';
+    }
+
+    function getHealthClass(state) {
+      switch(state) {
+        case 'GREEN': return 'health-green';
+        case 'YELLOW': return 'health-yellow';
+        case 'RED': return 'health-red';
+        default: return 'health-green';
+      }
+    }
+
+    function updateLastUpdated() {
+      const now = new Date();
+      document.getElementById('last-updated').textContent = now.toLocaleTimeString();
+    }
+
+    async function loadStats() {
+      try {
+        const response = await fetch('/api/v1/stats');
+        if (!response.ok) throw new Error('Failed to fetch stats');
+        const data = await response.json();
+        
+        const content = document.getElementById('stats-content');
+        content.innerHTML = `
+          <div class="stats-container">
+            <div class="stat-card">
+              <div class="stat-title">Application</div>
+              <div class="stat-item">
+                <span class="stat-label">Version</span>
+                <span class="stat-value">${data.app.version}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Uptime</span>
+                <span class="stat-value">${Math.floor(data.app.uptime / 60)}m ${Math.floor(data.app.uptime % 60)}s</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Goroutines</span>
+                <span class="stat-value">${data.app.goroutines}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Memory Used</span>
+                <span class="stat-value">${formatBytes(data.app.memory.heap_alloc_bytes)}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Memory Total</span>
+                <span class="stat-value">${formatBytes(data.app.memory.sys_bytes)}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">GC Cycles</span>
+                <span class="stat-value">${data.app.gc.cycles}</span>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-title">Relay Operations</div>
+              <div class="stat-item">
+                <span class="stat-label">Publish Attempts</span>
+                <span class="stat-value">${data.relay.publish_attempts}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Publish Successes</span>
+                <span class="stat-value">${data.relay.publish_successes}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Publish Failures</span>
+                <span class="stat-value">${data.relay.publish_failures}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Query Requests</span>
+                <span class="stat-value">${data.relay.query_requests}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Query Events Returned</span>
+                <span class="stat-value">${data.relay.query_events_returned}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Count Requests</span>
+                <span class="stat-value">${data.relay.count_requests}</span>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-title">Health Status</div>
+              <div class="stat-item">
+                <span class="stat-label">Overall Health</span>
+                <span class="stat-value">
+                  <span class="health-indicator ${getHealthClass(data.relay.main_health_state)}">
+                    ${data.relay.main_health_state}
+                  </span>
+                </span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Publish Health</span>
+                <span class="stat-value">
+                  <span class="health-indicator ${getHealthClass(data.relay.publish_health_state)}">
+                    ${data.relay.publish_health_state}
+                  </span>
+                </span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Query Health</span>
+                <span class="stat-value">
+                  <span class="health-indicator ${getHealthClass(data.relay.query_health_state)}">
+                    ${data.relay.query_health_state}
+                  </span>
+                </span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Consecutive Publish Failures</span>
+                <span class="stat-value">${data.relay.consecutive_publish_failures}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Consecutive Query Failures</span>
+                <span class="stat-value">${data.relay.consecutive_query_failures}</span>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-title">Performance</div>
+              <div class="stat-item">
+                <span class="stat-label">Avg Publish Duration</span>
+                <span class="stat-value">${formatDuration(data.relay.average_publish_duration_ms)}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Avg Query Duration</span>
+                <span class="stat-value">${formatDuration(data.relay.average_query_duration_ms)}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Avg Count Duration</span>
+                <span class="stat-value">${formatDuration(data.relay.average_count_duration_ms)}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Total Publish Time</span>
+                <span class="stat-value">${formatDuration(data.relay.total_publish_duration_ms)}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Total Query Time</span>
+                <span class="stat-value">${formatDuration(data.relay.total_query_duration_ms)}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Total Count Time</span>
+                <span class="stat-value">${formatDuration(data.relay.total_count_duration_ms)}</span>
+              </div>
+            </div>
+          </div>
+        `;
+        
+        updateLastUpdated();
+      } catch (error) {
+        const content = document.getElementById('stats-content');
+        content.innerHTML = `<div class="error">Failed to load statistics: ${error.message}</div>`;
+      }
+    }
+
+    // Load stats immediately
+    loadStats();
+
+    // Set up auto-refresh every 5 seconds
+    refreshInterval = setInterval(loadStats, 5000);
+
+    // Clean up on page unload
+    window.addEventListener('beforeunload', () => {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
+    });
+  </script>
+</body>
+</html>

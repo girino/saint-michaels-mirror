@@ -331,6 +331,34 @@ func main() {
 		}
 	})
 
+	// serve stats page
+	statsTplPath := "cmd/saint-michaels-mirror/templates/stats.html"
+	statsTpl, err := template.ParseFiles(statsTplPath)
+	if err != nil {
+		log.Fatalf("failed to parse stats template %s: %v", statsTplPath, err)
+	}
+	mux.HandleFunc("/stats", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := statsTpl.Execute(w, nil); err != nil {
+			http.Error(w, "template render error", http.StatusInternalServerError)
+			log.Printf("stats template execute error: %v", err)
+		}
+	})
+
+	// serve health page
+	healthTplPath := "cmd/saint-michaels-mirror/templates/health.html"
+	healthTpl, err := template.ParseFiles(healthTplPath)
+	if err != nil {
+		log.Fatalf("failed to parse health template %s: %v", healthTplPath, err)
+	}
+	mux.HandleFunc("/health", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := healthTpl.Execute(w, nil); err != nil {
+			http.Error(w, "template render error", http.StatusInternalServerError)
+			log.Printf("health template execute error: %v", err)
+		}
+	})
+
 	// serve static assets (icon/banner) from ./cmd/saint-michaels-mirror/static
 	fs := http.FileServer(http.Dir("cmd/saint-michaels-mirror/static"))
 	mux.Handle("/static/", http.StripPrefix("/static/", fs))
