@@ -189,6 +189,7 @@ func main() {
 				Name          string
 				Description   string
 				PubKey        string
+				PubKeyNPub    string
 				Contact       string
 				ContactHref   string
 				ContactIsLink bool
@@ -202,6 +203,7 @@ func main() {
 				Name:          r.Info.Name,
 				Description:   r.Info.Description,
 				PubKey:        r.Info.PubKey,
+				PubKeyNPub:    "",
 				Contact:       r.Info.Contact,
 				ContactHref:   "",
 				ContactIsLink: false,
@@ -218,6 +220,13 @@ func main() {
 				// expose pubkey as npub contact when none provided
 				if npub, err := nip19.EncodePublicKey(vm.PubKey); err == nil && npub != "" {
 					vm.Contact = npub
+				}
+			}
+
+			// compute npub for explicit display
+			if vm.PubKey != "" {
+				if npub, err := nip19.EncodePublicKey(vm.PubKey); err == nil && npub != "" {
+					vm.PubKeyNPub = npub
 				}
 			}
 
