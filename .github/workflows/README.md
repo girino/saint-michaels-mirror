@@ -24,16 +24,7 @@ This directory contains GitHub Actions workflows for automated CI/CD, testing, a
   - Docker container run test for both architectures
   - Health check validation
 
-### 3. Docker (`docker.yml`)
-- **Trigger**: Push to `main` branch only
-- **Purpose**: Build and push latest Docker image for main branch
-- **Actions**:
-  - Build multi-architecture images (amd64, arm64)
-  - Push `latest` tag to GitHub Container Registry (ghcr.io)
-  - Cache layers for faster builds
-  - Provides latest image for users between releases
-
-### 4. Release (`release.yml`)
+### 3. Release (`release.yml`)
 - **Trigger**: Push tags matching `v*` pattern
 - **Purpose**: Create GitHub releases with Docker images and binary executables
 - **Actions**:
@@ -45,7 +36,7 @@ This directory contains GitHub Actions workflows for automated CI/CD, testing, a
   - Upload individual binaries and complete archives to release assets
   - Tag images with semantic versioning (v1.0.0, v1.0, v1, latest)
 
-### 5. Security (`security.yml`)
+### 4. Security (`security.yml`)
 - **Trigger**: Push to `main`, Pull Requests to `main`, Weekly schedule
 - **Purpose**: Security scanning and vulnerability detection
 - **Actions**:
@@ -59,12 +50,10 @@ This directory contains GitHub Actions workflows for automated CI/CD, testing, a
 Images are published to: `ghcr.io/girino/saint-michaels-mirror`
 
 ### Tags
-- `latest` - Latest stable release
+- `latest` - Latest stable release (created by release.yml)
 - `v1.0.0` - Specific version tags
 - `v1.0` - Major.minor version tags
 - `v1` - Major version tags
-- `main` - Latest main branch build
-- `pr-123` - Pull request builds
 
 ## Binary Executables
 
