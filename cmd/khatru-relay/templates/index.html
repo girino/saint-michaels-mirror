@@ -1,47 +1,4 @@
 <!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>nostr relay — NIP-11</title>
-    <style>
-      body{font-family: system-ui, sans-serif;line-height:1.4;margin:2rem;background:#0f172a;color:#e6eef8}
-      .card{background:#071033;padding:1rem;border-radius:8px;max-width:900px;margin:0 auto}
-      pre{white-space:pre-wrap;word-break:break-word;background:#041129;padding:.5rem;border-radius:6px}
-      header h1{margin:0 0 .5rem}
-    </style>
-  </head>
-  <body>
-    <div class="card">
-      <header>
-        <h1>NIP-11: Relay info</h1>
-        <p id="desc">Loading…</p>
-      </header>
-
-      <section>
-        <h2>Full NIP-11 JSON</h2>
-        <pre id="json">Loading…</pre>
-      </section>
-    </div>
-
-    <script>
-      async function loadNip11(){
-        try{
-          const res = await fetch('/.well-known/nostr.json',{headers:{'Accept':'application/nostr+json,application/json'}})
-          if(!res.ok) throw new Error('HTTP '+res.status)
-          const j = await res.json()
-          document.getElementById('json').textContent = JSON.stringify(j, null, 2)
-          document.getElementById('desc').textContent = j.description || j.name || 'No description'
-        }catch(err){
-          document.getElementById('json').textContent = 'Failed to load: '+err
-          document.getElementById('desc').textContent = 'Unavailable'
-        }
-      }
-      loadNip11()
-    </script>
-  </body>
-</html>
-<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -126,7 +83,7 @@
       <script>
         (async function(){
           try{
-            const resp = await fetch('/.well-known/nostr.json');
+            const resp = await fetch('/', { headers: { 'Accept': 'application/nostr+json,application/json' } });
             if(!resp.ok) throw new Error('failed to fetch');
             const data = await resp.json();
             const pretty = JSON.stringify(data, null, 2);
