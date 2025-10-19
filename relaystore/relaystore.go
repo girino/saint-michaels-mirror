@@ -2,9 +2,12 @@ package relaystore
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
+	neturl "net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -43,6 +46,8 @@ type RelayStore struct {
 	countExternal       int64
 	countEventsReturned int64
 	countFailures       int64
+	// subset of queryUrls that advertise NIP-45 in their NIP-11
+	countableQueryUrls []string
 }
 
 // Stats holds runtime counters exported by RelayStore
@@ -139,8 +144,110 @@ func (r *RelayStore) Init() error {
 	}
 	// create a SimplePool for queries
 	r.pool = nostr.NewSimplePool(context.Background(), nostr.WithPenaltyBox())
+
+	// build countableQueryUrls by probing each query relay's NIP-11 to see if
+	// it advertises support for NIP-45. We do a best-effort HTTP(S) GET to the
+	// relay's /.well-known/nostr.json or the host root as per NIP-11. If the
+	// probe fails, we skip the relay for counting but keep it as a query
+	// remote for FetchMany.
+	r.countableQueryUrls = []string{}
+	for _, q := range r.queryUrls {
+		q = strings.TrimSpace(q)
+		if q == "" {
+			continue
+		}
+		// derive a well-formed URL to probe NIP-11 via Accept header: GET / with
+		// Accept: application/nostr+json. Convert ws(s):// to http(s):// as
+		// needed and probe the root path.
+		u := q
+		if strings.HasPrefix(u, "ws://") {
+			u = "http://" + strings.TrimPrefix(u, "ws://")
+		} else if strings.HasPrefix(u, "wss://") {
+			u = "https://" + strings.TrimPrefix(u, "wss://")
+		}
+		parsed, err := neturl.Parse(u)
+		if err != nil {
+			if r.Verbose {
+				log.Printf("[relaystore][WARN] cannot parse query url %s: %v", q, err)
+			}
+			continue
+		}
+		// ensure root path
+		parsed.Path = "/"
+		probeURL := parsed.String()
+
+		if r.Verbose {
+			log.Printf("[relaystore] probing NIP-11 for %s -> %s", q, probeURL)
+		}
+		client := &http.Client{Timeout: 4 * time.Second}
+		req, err := http.NewRequest("GET", probeURL, nil)
+		if err != nil {
+			if r.Verbose {
+				log.Printf("[relaystore][INFO] failed to build NIP-11 probe request for %s: %v", q, err)
+			}
+			continue
+		}
+		// NIP-01 requires Accept: application/nostr+json
+		req.Header.Set("Accept", "application/nostr+json")
+		resp, err := client.Do(req)
+		if err != nil {
+			if r.Verbose {
+				log.Printf("[relaystore][INFO] failed probing NIP-11 for %s: %v", q, err)
+			}
+			continue
+		}
+		func() {
+			defer resp.Body.Close()
+			if resp.StatusCode != 200 {
+				if r.Verbose {
+					log.Printf("[relaystore][INFO] non-200 NIP-11 response from %s: %d", q, resp.StatusCode)
+				}
+				return
+			}
+			var doc map[string]interface{}
+			if err := json.NewDecoder(resp.Body).Decode(&doc); err != nil {
+				if r.Verbose {
+					log.Printf("[relaystore][INFO] failed to decode NIP-11 from %s: %v", q, err)
+				}
+				return
+			}
+			// check supported_nips (NIP-11) for 45
+			if s, ok := doc["supported_nips"]; ok {
+				switch arr := s.(type) {
+				case []interface{}:
+					for _, v := range arr {
+						// JSON numbers decode to float64
+						if num, ok := v.(float64); ok {
+							if int(num) == 45 {
+								r.countableQueryUrls = append(r.countableQueryUrls, q)
+								if r.Verbose {
+									log.Printf("[relaystore] relay %s advertises NIP-45; added to countable list", q)
+								}
+								return
+							}
+						}
+					}
+				case []int:
+					for _, nip := range arr {
+						if nip == 45 {
+							r.countableQueryUrls = append(r.countableQueryUrls, q)
+							if r.Verbose {
+								log.Printf("[relaystore] relay %s advertises NIP-45; added to countable list", q)
+							}
+							return
+						}
+					}
+				}
+			}
+			if r.Verbose {
+				log.Printf("[relaystore] relay %s does not advertise NIP-45", q)
+			}
+		}()
+	}
+
 	if r.Verbose {
 		log.Printf("[relaystore] query remotes: %v", r.queryUrls)
+		log.Printf("[relaystore] countable query remotes (NIP-45): %v", r.countableQueryUrls)
 	}
 	return nil
 }
@@ -184,8 +291,8 @@ func (r *RelayStore) ensureRelay(ctx context.Context, url string) (*nostr.Relay,
 
 // QueryEvents returns an empty, closed channel because this store does not persist events.
 func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan *nostr.Event, error) {
-	// count total requests (count-specific only)
-	atomic.AddInt64(&r.countRequests, 1)
+	// count total requests
+	atomic.AddInt64(&r.queryRequests, 1)
 
 	// If khatru explicitly marked this as an internal call, short-circuit.
 	if khatru.IsInternalCall(ctx) {
@@ -370,7 +477,7 @@ func (r *RelayStore) ReplaceEvent(ctx context.Context, evt *nostr.Event) error {
 // short-circuit (when ctx.Value(1) == nil) are not forwarded.
 func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int64, error) {
 	// count total requests
-	atomic.AddInt64(&r.queryRequests, 1)
+	atomic.AddInt64(&r.countRequests, 1)
 
 	// short-circuit khatru internal calls
 	if khatru.IsInternalCall(ctx) {
@@ -403,8 +510,14 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 		log.Printf("[relaystore][DEBUG] CountEvents called (khatru_internal_call=%v) filter=%+v", khatru.IsInternalCall(ctx), filter)
 	}
 
-	// ensure relays and count failures
-	for _, q := range r.queryUrls {
+	// ensure relays and count failures (only for countable query remotes)
+	if len(r.countableQueryUrls) == 0 {
+		if r.Verbose {
+			log.Printf("[relaystore][DEBUG] no NIP-45-capable query remotes available; returning 0")
+		}
+		return 0, nil
+	}
+	for _, q := range r.countableQueryUrls {
 		if q == "" {
 			continue
 		}
@@ -417,7 +530,7 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 	}
 
 	// use CountMany which aggregates counts across relays (NIP-45 HyperLogLog)
-	cnt := r.pool.CountMany(ctx, r.queryUrls, filter, nil)
+	cnt := r.pool.CountMany(ctx, r.countableQueryUrls, filter, nil)
 	if cnt > 0 {
 		atomic.AddInt64(&r.countEventsReturned, int64(cnt))
 	}
