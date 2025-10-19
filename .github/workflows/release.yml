@@ -1,135 +1,98 @@
-name: Release
+name: Create Release
 
 on:
   push:
     tags:
-      - 'v*.*.*'
-      - 'v*.*.*-rc*'
+      - 'v*'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/saint-michaels-mirror
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      packages: write
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.24.1'
-      # Caching disabled due to runner tar extraction conflicts
-      - name: Prepare release dir
-        run: mkdir -p release
-      - name: Build Linux amd64
-        run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-X main.Version=${{ github.ref_name }}" -o release/saint-michaels-mirror-linux-amd64 ./cmd/saint-michaels-mirror
-      - name: Build Linux arm64
-        run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "-X main.Version=${{ github.ref_name }}" -o release/saint-michaels-mirror-linux-arm64 ./cmd/saint-michaels-mirror
-      - name: Build macOS amd64
-        run: |
-          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.Version=${{ github.ref_name }}" -o release/saint-michaels-mirror-darwin-amd64 ./cmd/saint-michaels-mirror
-      - name: Build macOS arm64
-        run: |
-          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.Version=${{ github.ref_name }}" -o release/saint-michaels-mirror-darwin-arm64 ./cmd/saint-michaels-mirror
-      - name: Build Windows amd64
-        run: |
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "-X main.Version=${{ github.ref_name }}" -o release/saint-michaels-mirror-windows-amd64.exe ./cmd/saint-michaels-mirror
-      - name: Upload release artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: saint-michaels-mirror-${{ github.ref_name }}
-          path: release/
-      - name: Get or create GitHub Release
-        id: create_release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          TAG="${{ github.ref_name }}"
-          API="https://api.github.com/repos/${{ github.repository }}"
-          # Ensure jq is available
-          if ! command -v jq >/dev/null 2>&1; then
-            sudo apt-get update -y
-            sudo apt-get install -y jq
-          fi
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-          # Try to GET the release by tag
-          resp_file=$(mktemp)
-          http_code=$(curl -s -w "%{http_code}" -H "Authorization: token $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" -o "$resp_file" "$API/releases/tags/$TAG" || true)
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
-          if [ "$http_code" = "200" ]; then
-            echo "Found existing release for $TAG — replacing it"
-            release_id=$(jq -r .id "$resp_file")
-            # Delete existing release (this removes the release but leaves the tag; we'll recreate the release object)
-            del_resp=$(curl -s -X DELETE -H "Authorization: token $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "$API/releases/$release_id")
-            # Create a fresh release object
-            if [[ "$TAG" == *"-rc"* ]]; then
-              prerelease=true
-            else
-              prerelease=false
-            fi
-            # Load release notes if present
-            notes_file=".github/release-notes/${TAG}.md"
-            if [ -f "$notes_file" ]; then
-              release_body=$(jq -Rs '.' "$notes_file")
-            else
-              release_body="\"\""
-            fi
-            body=$(jq -n --arg tag "$TAG" --arg name "$TAG" --argjson prerelease $prerelease --arg body "$release_body" '{ tag_name: $tag, name: $name, draft: false, prerelease: $prerelease, body: ($body|fromjson) }')
-            created=$(curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" -d "$body" "$API/releases")
-            upload_url=$(echo "$created" | jq -r .upload_url)
-          elif [ "$http_code" = "404" ]; then
-            echo "Release not found, creating release for $TAG"
-            if [[ "$TAG" == *"-rc"* ]]; then
-              prerelease=true
-            else
-              prerelease=false
-            fi
-            notes_file=".github/release-notes/${TAG}.md"
-            if [ -f "$notes_file" ]; then
-              release_body=$(jq -Rs '.' "$notes_file")
-            else
-              release_body="\"\""
-            fi
-            body=$(jq -n --arg tag "$TAG" --arg name "$TAG" --argjson prerelease $prerelease --arg body "$release_body" '{ tag_name: $tag, name: $name, draft: false, prerelease: $prerelease, body: ($body|fromjson) }')
-            created=$(curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" -d "$body" "$API/releases")
-            upload_url=$(echo "$created" | jq -r .upload_url)
-          else
-            echo "Unexpected response ($http_code) from GitHub API while checking release:" >&2
-            cat "$resp_file" >&2
-            exit 1
-          fi
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
-          # Export upload_url for subsequent steps
-          echo "upload_url=$upload_url" >> "$GITHUB_OUTPUT"
-      - name: Upload individual binaries via curl
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          UPLOAD_URL="${{ steps.create_release.outputs.upload_url }}"
-          UPLOAD_URL="${UPLOAD_URL%%\{*}"
-          cd release
-          # Generate a full chronological commit history into the release directory
-          echo "Generating full commit history file"
-          git --no-pager log --reverse --pretty=format:'commit %H%nAuthor: %an <%ae>%nDate: %ad%n%n%s%n%n%b%n---' --date=short > COMMIT_HISTORY.md
-          echo "Wrote release/COMMIT_HISTORY.md (size: $(wc -c < COMMIT_HISTORY.md) bytes)"
-          for f in *; do
-            [ -f "$f" ] || continue
-            echo "Uploading $f"
-            ASSET_NAME="$f"
-            http_status=$(curl -s -o /tmp/upload_resp -w "%{http_code}" \
-              -X POST \
-              -H "Authorization: token $GITHUB_TOKEN" \
-              -H "Content-Type: application/octet-stream" \
-              --data-binary @"$f" \
-              "$UPLOAD_URL?name=$ASSET_NAME")
-            if [ "$http_status" -ge 200 ] && [ "$http_status" -lt 300 ]; then
-              echo "Uploaded $f (HTTP $http_status)"
-            else
-              echo "Upload failed for $f (HTTP $http_status)" >&2
-              cat /tmp/upload_resp >&2 || true
-              exit 1
-            fi
-          done
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
+          type=raw,value=latest
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Generate changelog
+      id: changelog
+      run: |
+        # Get the previous tag
+        PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+        
+        # Generate changelog
+        if [ -n "$PREVIOUS_TAG" ]; then
+          CHANGELOG=$(git log --pretty=format:"- %s" $PREVIOUS_TAG..HEAD)
+        else
+          CHANGELOG=$(git log --pretty=format:"- %s" HEAD)
+        fi
+        
+        echo "changelog<<EOF" >> $GITHUB_OUTPUT
+        echo "$CHANGELOG" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Create Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref_name }}
+        release_name: Release ${{ github.ref_name }}
+        body: |
+          ## Espelho de São Miguel ${{ github.ref_name }}
+          
+          ### Docker Images
+          - `${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}`
+          - `${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest`
+          
+          ### Changes
+          ${{ steps.changelog.outputs.changelog }}
+          
+          ### Usage
+          ```bash
+          docker run -d \
+            --name saint-michaels-mirror \
+            -p 3337:3337 \
+            -e RELAY_NAME="Your Relay Name" \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+          ```
+        draft: false
+        prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}

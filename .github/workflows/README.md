@@ -1,0 +1,117 @@
+# GitHub Actions Workflows
+
+This directory contains GitHub Actions workflows for automated CI/CD, testing, and deployment of Espelho de São Miguel.
+
+## Workflows
+
+### 1. CI (`ci.yml`)
+- **Trigger**: Push to `main`, Pull Requests to `main`
+- **Purpose**: Basic Go build and test validation
+- **Actions**: 
+  - Checkout code
+  - Set up Go 1.24.1
+  - Install dependencies
+  - Format code with `gofmt`
+  - Build application
+  - Run tests
+
+### 2. Test (`test.yml`)
+- **Trigger**: Push to `main`, Pull Requests to `main`
+- **Purpose**: Comprehensive testing including Docker
+- **Actions**:
+  - Go build and test
+  - Docker image build test
+  - Docker container run test
+  - Health check validation
+
+### 3. Docker (`docker.yml`)
+- **Trigger**: Push to `main`, Tags `v*`, Pull Requests to `main`
+- **Purpose**: Build and push Docker images
+- **Actions**:
+  - Build multi-architecture images (amd64, arm64)
+  - Push to GitHub Container Registry (ghcr.io)
+  - Cache layers for faster builds
+  - Tag images with semantic versioning
+
+### 4. Release (`release.yml`)
+- **Trigger**: Push tags matching `v*` pattern
+- **Purpose**: Create GitHub releases with Docker images
+- **Actions**:
+  - Build and push release Docker images
+  - Generate changelog from git commits
+  - Create GitHub release with changelog
+  - Tag images with version numbers
+
+### 5. Security (`security.yml`)
+- **Trigger**: Push to `main`, Pull Requests to `main`, Weekly schedule
+- **Purpose**: Security scanning and vulnerability detection
+- **Actions**:
+  - File system security scan with Trivy
+  - Docker image security scan with Trivy
+  - Upload results to GitHub Security tab
+
+## Docker Images
+
+### Registry
+Images are published to: `ghcr.io/girino/saint-michaels-mirror`
+
+### Tags
+- `latest` - Latest stable release
+- `v1.0.0` - Specific version tags
+- `v1.0` - Major.minor version tags
+- `v1` - Major version tags
+- `main` - Latest main branch build
+- `pr-123` - Pull request builds
+
+### Usage
+
+#### Latest Release
+```bash
+docker run -d \
+  --name saint-michaels-mirror \
+  -p 3337:3337 \
+  -e RELAY_NAME="Your Relay Name" \
+  ghcr.io/girino/saint-michaels-mirror:latest
+```
+
+#### Specific Version
+```bash
+docker run -d \
+  --name saint-michaels-mirror \
+  -p 3337:3337 \
+  -e RELAY_NAME="Your Relay Name" \
+  ghcr.io/girino/saint-michaels-mirror:v1.0.0
+```
+
+## Environment Variables
+
+The following environment variables can be used to configure the relay:
+
+- `RELAY_NAME` - Display name of the relay
+- `RELAY_DESCRIPTION` - Description of the relay
+- `RELAY_CONTACT` - Contact information (npub, email, etc.)
+- `RELAY_SERVICE_URL` - Public URL of the relay
+- `RELAY_ICON` - Path to relay icon
+- `RELAY_BANNER` - Path to relay banner
+- `ADDR` - Address to listen on (default: :3337)
+- `PUBLISH_REMOTES` - Comma-separated list of publish relays
+- `QUERY_REMOTES` - Comma-separated list of query relays
+- `VERBOSE` - Enable verbose logging (1 to enable)
+
+## Secrets
+
+The following secrets are required for the workflows:
+
+- `GITHUB_TOKEN` - Automatically provided by GitHub Actions
+- `DOCKER_USERNAME` - Docker Hub username (if using Docker Hub)
+- `DOCKER_PASSWORD` - Docker Hub password (if using Docker Hub)
+
+## Permissions
+
+The workflows require the following permissions:
+
+- `contents: read` - Read repository contents
+- `packages: write` - Write to GitHub Container Registry
+- `security-events: write` - Write security scan results
+
+These permissions are configured in the workflow files and will be automatically granted when the workflows are enabled.
