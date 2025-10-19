@@ -25,26 +25,25 @@ This directory contains GitHub Actions workflows for automated CI/CD, testing, a
   - Health check validation
 
 ### 3. Docker (`docker.yml`)
-- **Trigger**: Push to `main`, Tags `v*`
-- **Purpose**: Build and push Docker images (only pushes on tags)
+- **Trigger**: Push to `main` branch only
+- **Purpose**: Build and push latest Docker image for main branch
 - **Actions**:
   - Build multi-architecture images (amd64, arm64)
-  - Push to GitHub Container Registry (ghcr.io) only on tagged commits
-  - Build (but don't push) on main branch commits for testing
+  - Push `latest` tag to GitHub Container Registry (ghcr.io)
   - Cache layers for faster builds
-  - Tag images with semantic versioning
+  - Provides latest image for users between releases
 
 ### 4. Release (`release.yml`)
 - **Trigger**: Push tags matching `v*` pattern
 - **Purpose**: Create GitHub releases with Docker images and binary executables
 - **Actions**:
-  - Build and push release Docker images (multi-architecture)
+  - Build and push release Docker images (multi-architecture) with version tags
   - Build binary executables for multiple platforms (Linux, macOS, Windows)
   - Generate SHA256 checksums for all binaries
   - Generate changelog from git commits
   - Create GitHub release with changelog and binary downloads
-  - Upload individual binaries and archive to release assets
-  - Tag images with version numbers
+  - Upload individual binaries and complete archives to release assets
+  - Tag images with semantic versioning (v1.0.0, v1.0, v1, latest)
 
 ### 5. Security (`security.yml`)
 - **Trigger**: Push to `main`, Pull Requests to `main`, Weekly schedule
