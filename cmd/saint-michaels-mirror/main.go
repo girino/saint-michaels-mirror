@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/fiatjaf/khatru"
-	"github.com/girino/relay-agregator/relaystore"
+	"github.com/girino/saint-michaels-mirror/relaystore"
 	"github.com/nbd-wtf/go-nostr"
 	nip11 "github.com/nbd-wtf/go-nostr/nip11"
 	nip19 "github.com/nbd-wtf/go-nostr/nip19"
