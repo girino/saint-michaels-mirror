@@ -55,11 +55,11 @@
         <h1>{{.Name}}</h1>
         <p class="lead">{{.Description}}</p>
         <div style="display:flex;gap:10px;align-items:center">
-          {{if .ServiceURL}}<a class="pill" href="{{.ServiceURL}}">Website</a>{{end}}
+          {{if .ServiceURL}}<a class="pill" href="{{.ServiceURL}}" target="_blank" rel="noopener">Website</a>{{end}}
           {{if .Contact}}
             <span class="k">Contact:</span>&nbsp;
             {{if .ContactIsLink}}
-              <a class="v" href="{{.ContactHref}}">{{.Contact}}</a>
+              <a class="v" href="{{.ContactHref}}" target="_blank" rel="noopener">{{.Contact}}</a>
             {{else}}
               <span class="v">{{.Contact}}</span>
             {{end}}
@@ -71,7 +71,7 @@
     <div class="meta">
       <div class="card">
         <div class="k">Public key</div>
-  <div class="v">{{if .PubKeyNPub}}<a class="v" href="https://njump.me/{{.PubKeyNPub}}">{{.PubKeyNPub}}</a>{{else}}{{.PubKey}}{{end}}</div>
+  <div class="v">{{if .PubKeyNPub}}<a class="v" href="https://njump.me/{{.PubKeyNPub}}" target="_blank" rel="noopener">{{.PubKeyNPub}}</a>{{else}}{{.PubKey}}{{end}}</div>
       </div>
       <div class="card">
         <div class="k">Software / Version</div>
