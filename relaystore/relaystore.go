@@ -48,6 +48,10 @@ type RelayStore struct {
 	countFailures       int64
 	// subset of queryUrls that advertise NIP-45 in their NIP-11
 	countableQueryUrls []string
+	// health check tracking
+	consecutivePublishFailures int64
+	consecutiveQueryFailures   int64
+	maxConsecutiveFailures     int64
 }
 
 // Stats holds runtime counters exported by RelayStore
@@ -66,33 +70,53 @@ type Stats struct {
 	CountExternal       int64 `json:"count_external_requests"`
 	CountEventsReturned int64 `json:"count_events_returned"`
 	CountFailures       int64 `json:"count_failures"`
+	// Health check fields
+	ConsecutivePublishFailures int64  `json:"consecutive_publish_failures"`
+	ConsecutiveQueryFailures   int64  `json:"consecutive_query_failures"`
+	IsHealthy                  bool   `json:"is_healthy"`
+	HealthStatus               string `json:"health_status"`
 }
 
 // Stats returns a snapshot of the RelayStore counters
 func (r *RelayStore) Stats() Stats {
+	consecutivePublishFailures := atomic.LoadInt64(&r.consecutivePublishFailures)
+	consecutiveQueryFailures := atomic.LoadInt64(&r.consecutiveQueryFailures)
+	maxFailures := atomic.LoadInt64(&r.maxConsecutiveFailures)
+
+	isHealthy := consecutivePublishFailures < maxFailures && consecutiveQueryFailures < maxFailures
+	healthStatus := "healthy"
+	if !isHealthy {
+		healthStatus = "unhealthy"
+	}
+
 	return Stats{
-		PublishAttempts:     atomic.LoadInt64(&r.publishAttempts),
-		PublishSuccesses:    atomic.LoadInt64(&r.publishSuccesses),
-		PublishFailures:     atomic.LoadInt64(&r.publishFailures),
-		QueryRequests:       atomic.LoadInt64(&r.queryRequests),
-		QueryInternal:       atomic.LoadInt64(&r.queryInternal),
-		QueryExternal:       atomic.LoadInt64(&r.queryExternal),
-		QueryEventsReturned: atomic.LoadInt64(&r.queryEventsReturned),
-		QueryFailures:       atomic.LoadInt64(&r.queryFailures),
-		CountRequests:       atomic.LoadInt64(&r.countRequests),
-		CountInternal:       atomic.LoadInt64(&r.countInternal),
-		CountExternal:       atomic.LoadInt64(&r.countExternal),
-		CountEventsReturned: atomic.LoadInt64(&r.countEventsReturned),
-		CountFailures:       atomic.LoadInt64(&r.countFailures),
+		PublishAttempts:            atomic.LoadInt64(&r.publishAttempts),
+		PublishSuccesses:           atomic.LoadInt64(&r.publishSuccesses),
+		PublishFailures:            atomic.LoadInt64(&r.publishFailures),
+		QueryRequests:              atomic.LoadInt64(&r.queryRequests),
+		QueryInternal:              atomic.LoadInt64(&r.queryInternal),
+		QueryExternal:              atomic.LoadInt64(&r.queryExternal),
+		QueryEventsReturned:        atomic.LoadInt64(&r.queryEventsReturned),
+		QueryFailures:              atomic.LoadInt64(&r.queryFailures),
+		CountRequests:              atomic.LoadInt64(&r.countRequests),
+		CountInternal:              atomic.LoadInt64(&r.countInternal),
+		CountExternal:              atomic.LoadInt64(&r.countExternal),
+		CountEventsReturned:        atomic.LoadInt64(&r.countEventsReturned),
+		CountFailures:              atomic.LoadInt64(&r.countFailures),
+		ConsecutivePublishFailures: consecutivePublishFailures,
+		ConsecutiveQueryFailures:   consecutiveQueryFailures,
+		IsHealthy:                  isHealthy,
+		HealthStatus:               healthStatus,
 	}
 }
 
 // New creates a RelayStore that will forward to the provided comma-separated URLs.
 func New(urls []string) *RelayStore {
 	rs := &RelayStore{
-		urls:           urls,
-		relays:         make(map[string]*nostr.Relay),
-		publishTimeout: 7 * time.Second,
+		urls:                   urls,
+		relays:                 make(map[string]*nostr.Relay),
+		publishTimeout:         7 * time.Second,
+		maxConsecutiveFailures: 10, // Default threshold: 10 consecutive failures
 	}
 	return rs
 }
@@ -100,10 +124,11 @@ func New(urls []string) *RelayStore {
 // NewWithQueryRemotes creates a RelayStore with separate publish remotes and query remotes.
 func NewWithQueryRemotes(publish []string, query []string) *RelayStore {
 	rs := &RelayStore{
-		urls:           publish,
-		queryUrls:      query,
-		relays:         make(map[string]*nostr.Relay),
-		publishTimeout: 7 * time.Second,
+		urls:                   publish,
+		queryUrls:              query,
+		relays:                 make(map[string]*nostr.Relay),
+		publishTimeout:         7 * time.Second,
+		maxConsecutiveFailures: 10, // Default threshold: 10 consecutive failures
 	}
 	return rs
 }
@@ -346,6 +371,7 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 	}
 
 	// before subscribing, try ensuring relays to detect quick failures and count them
+	queryFailures := 0
 	for _, q := range r.queryUrls {
 		if q == "" {
 			continue
@@ -353,10 +379,20 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 		if _, err := r.pool.EnsureRelay(q); err != nil {
 			// count query relay failure
 			atomic.AddInt64(&r.queryFailures, 1)
+			queryFailures++
 			if r.Verbose {
 				log.Printf("[relaystore][WARN] failed to ensure query relay %s: %v", q, err)
 			}
 		}
+	}
+
+	// Track consecutive query failures for health checking
+	if queryFailures == 0 {
+		// Success: reset consecutive failure counter
+		atomic.StoreInt64(&r.consecutiveQueryFailures, 0)
+	} else {
+		// Failure: increment consecutive failure counter
+		atomic.AddInt64(&r.consecutiveQueryFailures, 1)
 	}
 
 	evch := r.pool.FetchMany(ctx, r.queryUrls, filter)
@@ -452,9 +488,15 @@ func (r *RelayStore) SaveEvent(ctx context.Context, evt *nostr.Event) error {
 
 	wg.Wait()
 
+	// Track consecutive failures for health checking
 	if len(errs) == 0 {
+		// Success: reset consecutive failure counter
+		atomic.StoreInt64(&r.consecutivePublishFailures, 0)
 		return nil
 	}
+
+	// Failure: increment consecutive failure counter
+	atomic.AddInt64(&r.consecutivePublishFailures, 1)
 
 	// if all remotes failed, return aggregated error
 	return errors.New(strings.Join(func() []string {
@@ -517,16 +559,28 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 		}
 		return 0, nil
 	}
+
+	countFailures := 0
 	for _, q := range r.countableQueryUrls {
 		if q == "" {
 			continue
 		}
 		if _, err := r.pool.EnsureRelay(q); err != nil {
 			atomic.AddInt64(&r.countFailures, 1)
+			countFailures++
 			if r.Verbose {
 				log.Printf("[relaystore][WARN] failed to ensure query relay %s: %v", q, err)
 			}
 		}
+	}
+
+	// Track consecutive count failures for health checking
+	if countFailures == 0 {
+		// Success: reset consecutive failure counter
+		atomic.StoreInt64(&r.consecutiveQueryFailures, 0)
+	} else {
+		// Failure: increment consecutive failure counter
+		atomic.AddInt64(&r.consecutiveQueryFailures, 1)
 	}
 
 	// use CountMany which aggregates counts across relays (NIP-45 HyperLogLog)
