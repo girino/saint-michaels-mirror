@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!-- Minimal two-shape icon for perfect small-size legibility -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
-  <rect width="256" height="256" rx="40" fill="#0f1113"/>
-  <circle cx="128" cy="98" r="62" fill="#ffd166"/>
-  <rect x="118" y="110" width="20" height="46" rx="6" fill="#0f1113"/>
-</svg>

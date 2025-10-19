@@ -261,6 +261,10 @@ func main() {
 				log.Printf("template execute error: %v", err)
 			}
 		})
+
+		// serve static assets (icon/banner) from ./cmd/khatru-relay/static
+		fs := http.FileServer(http.Dir("cmd/khatru-relay/static"))
+		mux.Handle("/static/", http.StripPrefix("/static/", fs))
 	default:
 		log.Fatalf("unsupported store type: %T", s)
 	}
@@ -286,27 +290,6 @@ func main() {
 	if err := r.Start(host, port); err != nil {
 		log.Fatalf("relay exited: %v", err)
 	}
-}
-
-// (NIP description fetching removed per user request)
-
-func ensureSupportedNip11(r *khatru.Relay) {
-	if r == nil || r.Info == nil {
-		return
-	}
-	for _, v := range r.Info.SupportedNIPs {
-		switch vv := v.(type) {
-		case int:
-			if vv == 11 {
-				return
-			}
-		case int64:
-			if int(vv) == 11 {
-				return
-			}
-		}
-	}
-	r.Info.SupportedNIPs = append(r.Info.SupportedNIPs, 11)
 }
 
 func ensureSupportedNips(r *khatru.Relay, nips []int) {
