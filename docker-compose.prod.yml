@@ -15,7 +15,7 @@ services:
       # Container listens internally on 3337 (ADDR)
       ADDR: ":3337"
     expose:
-      - "3337"
+      - "${COMPOSE_RELAY_PORT:-3337}:3337" # host:container
     networks:
       - proxy_net
     healthcheck:
