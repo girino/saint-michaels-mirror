@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>{{.Name}} — {{block "title" .}}Espelho de São Miguel{{end}}</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/favicons/favicon-16x16.png">
+  <link rel="icon" type="image/png" sizes="48x48" href="/static/favicons/favicon-48x48.png">
+  <link rel="stylesheet" href="/static/css/main.css">
+  {{block "extra-css" .}}{{end}}
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      {{if .Banner}}
+        <div class="logo" style="background-image:url('{{.Banner}}');background-size:cover;background-position:center">
+          {{if .Icon}}
+            <img src="{{.Icon}}" alt="{{.Name}}" style="width:100%;height:100%;object-fit:cover;border-radius:10px">
+          {{else}}
+            <span style="color:var(--accent)">📡</span>
+          {{end}}
+        </div>
+      {{else}}
+        <div class="logo">
+          {{if .Icon}}
+            <img src="{{.Icon}}" alt="{{.Name}}" style="width:100%;height:100%;object-fit:cover;border-radius:10px">
+          {{else}}
+            <span style="color:var(--accent)">📡</span>
+          {{end}}
+        </div>
+      {{end}}
+      <div>
+        <h1>{{block "page-title" .}}{{.Name}}{{end}}</h1>
+        <p class="lead">{{block "page-description" .}}{{.Description}}{{end}}</p>
+      </div>
+    </header>
+
+    {{block "content" .}}{{end}}
+
+    <footer>
+      <div style="color:var(--muted);font-size:0.85rem">
+        Powered by <a href="https://github.com/fiatjaf/khatru" target="_blank" rel="noopener">khatru</a> and <a href="https://github.com/girino/saint-michaels-mirror" target="_blank" rel="noopener">Espelho de São Miguel</a> — © 2025 <a href="https://github.com/girino" target="_blank" rel="noopener">Girino Vey</a> — <span>{{.Version}}</span>
+      </div>
+    </footer>
+  </div>
+
+  {{block "extra-js" .}}{{end}}
+</body>
+</html>

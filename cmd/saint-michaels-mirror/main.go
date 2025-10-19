@@ -332,21 +332,24 @@ func main() {
 	}
 
 	// khatru will serve NIP-11 itself; we only expose metrics here.
-	// parse the HTML template once and serve it with r.Info as data
-	tplPath := "cmd/saint-michaels-mirror/templates/index.html"
-	tpl, err := template.ParseFiles(tplPath)
+	// parse templates with inheritance (base template + page templates)
+	baseTplPath := "cmd/saint-michaels-mirror/templates/base.html"
+	
+	// parse main page template
+	mainTplPath := "cmd/saint-michaels-mirror/templates/index.html"
+	mainTpl, err := template.ParseFiles(baseTplPath, mainTplPath)
 	if err != nil {
-		log.Fatalf("failed to parse template %s: %v", tplPath, err)
+		log.Fatalf("failed to parse main template %s: %v", mainTplPath, err)
 	}
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
 		vm := buildViewModel()
-		renderTemplate(w, tpl, vm, "main")
+		renderTemplate(w, mainTpl, vm, "main")
 	})
 
-	// serve stats page
+	// parse stats page template
 	statsTplPath := "cmd/saint-michaels-mirror/templates/stats.html"
-	statsTpl, err := template.ParseFiles(statsTplPath)
+	statsTpl, err := template.ParseFiles(baseTplPath, statsTplPath)
 	if err != nil {
 		log.Fatalf("failed to parse stats template %s: %v", statsTplPath, err)
 	}
@@ -355,9 +358,9 @@ func main() {
 		renderTemplate(w, statsTpl, vm, "stats")
 	})
 
-	// serve health page
+	// parse health page template
 	healthTplPath := "cmd/saint-michaels-mirror/templates/health.html"
-	healthTpl, err := template.ParseFiles(healthTplPath)
+	healthTpl, err := template.ParseFiles(baseTplPath, healthTplPath)
 	if err != nil {
 		log.Fatalf("failed to parse health template %s: %v", healthTplPath, err)
 	}
