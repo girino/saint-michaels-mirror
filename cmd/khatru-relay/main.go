@@ -190,6 +190,8 @@ func main() {
 				Description   string
 				PubKey        string
 				Contact       string
+				ContactHref   string
+				ContactIsLink bool
 				SupportedNIPs []any
 				Software      string
 				Version       string
@@ -201,12 +203,28 @@ func main() {
 				Description:   r.Info.Description,
 				PubKey:        r.Info.PubKey,
 				Contact:       r.Info.Contact,
+				ContactHref:   "",
+				ContactIsLink: false,
 				SupportedNIPs: r.Info.SupportedNIPs,
 				Software:      r.Info.Software,
 				Version:       r.Info.Version,
 				Icon:          r.Info.Icon,
 				Banner:        r.Info.Banner,
 				ServiceURL:    r.ServiceURL,
+			}
+
+			// compute contact link if it's an email or nostr nip19 pub/profile
+			if vm.Contact != "" {
+				c := strings.TrimSpace(vm.Contact)
+				// npub / nprofile
+				if strings.HasPrefix(c, "npub") || strings.HasPrefix(c, "nprofile") {
+					vm.ContactHref = "nostr:" + c
+					vm.ContactIsLink = true
+				} else if strings.Contains(c, "@") && !strings.Contains(c, " ") {
+					// treat as email
+					vm.ContactHref = "mailto:" + c
+					vm.ContactIsLink = true
+				}
 			}
 
 			if err := tpl.Execute(w, vm); err != nil {
