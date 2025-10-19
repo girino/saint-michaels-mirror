@@ -9,12 +9,14 @@ services:
     # but specifying env_file keeps intent explicit and works for some CI setups.
     env_file: .env
     environment:
-      RELAY_PORT: "${RELAY_PORT:-3337}"
+      # Force the internal listener address to :3337 (container-internal).
+      ADDR: ":3337"
       RELAY_NAME: "${RELAY_NAME:-Espelho de São Miguel}"
+    # Use COMPOSE_RELAY_PORT to control the host port mapping. Container listens on 3337.
     ports:
-      - "${RELAY_PORT:-3337}:${RELAY_PORT:-3337}" # HTTP/NIP-11/homepage
+      - "${COMPOSE_RELAY_PORT:-3337}:3337" # host:container
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:${RELAY_PORT:-3337}/ || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3337/ || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
