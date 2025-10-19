@@ -79,19 +79,24 @@
 
     <section style="margin-top:18px" class="card">
       <div class="k">Full NIP-11 JSON</div>
-      <pre id="nip11" style="white-space:pre-wrap;margin:8px 0 0;color:var(--muted);font-size:0.9rem;background:transparent;border:none;padding:0">loading...</pre>
+      <details id="nip11-details">
+        <summary style="cursor:pointer">Show NIP-11 JSON</summary>
+        <pre id="nip11" style="white-space:pre-wrap;margin:8px 0 0;color:var(--muted);font-size:0.9rem;background:transparent;border:none;padding:0">(click to load)</pre>
+      </details>
       <script>
-        (async function(){
+        document.getElementById('nip11-details').addEventListener('toggle', async function(e){
+          if(!this.open) return;
+          const pre = document.getElementById('nip11');
+          pre.textContent = 'loading...';
           try{
             const resp = await fetch('/', { headers: { 'Accept': 'application/nostr+json' } });
             if(!resp.ok) throw new Error('failed to fetch');
             const data = await resp.json();
-            const pretty = JSON.stringify(data, null, 2);
-            document.getElementById('nip11').textContent = pretty;
-          }catch(e){
-            document.getElementById('nip11').textContent = 'failed to load NIP-11: '+e;
+            pre.textContent = JSON.stringify(data, null, 2);
+          }catch(err){
+            pre.textContent = 'failed to load NIP-11: '+err;
           }
-        })();
+        });
       </script>
     </section>
 
