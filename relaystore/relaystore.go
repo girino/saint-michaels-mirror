@@ -453,13 +453,8 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 		log.Printf("[relaystore][DEBUG] QueryEvents called (khatru_internal_call=%v) filter=%+v", khatru.IsInternalCall(ctx), filter)
 	}
 
-	// Start timing measurement for the entire query operation
+	// Start timing measurement for the complete query operation
 	startTime := time.Now()
-	defer func() {
-		duration := time.Since(startTime)
-		atomic.AddInt64(&r.totalQueryDurationNs, duration.Nanoseconds())
-		atomic.AddInt64(&r.queryCount, 1)
-	}()
 
 	// before subscribing, try ensuring relays to detect quick failures and count them
 	queryFailures := 0
@@ -490,6 +485,13 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 	out := make(chan *nostr.Event)
 
 	go func() {
+		// Complete timing measurement for the complete query operation
+		defer func() {
+			duration := time.Since(startTime)
+			atomic.AddInt64(&r.totalQueryDurationNs, duration.Nanoseconds())
+			atomic.AddInt64(&r.queryCount, 1)
+		}()
+
 		defer close(out)
 		for ie := range evch {
 			// ie is a nostr.RelayEvent containing the Event pointer
