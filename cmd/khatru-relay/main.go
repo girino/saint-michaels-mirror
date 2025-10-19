@@ -186,33 +186,37 @@ func main() {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			// build a minimal view model expected by the template
 			vm := struct {
-				Name          string
-				Description   string
-				PubKey        string
-				PubKeyNPub    string
-				Contact       string
-				ContactHref   string
-				ContactIsLink bool
-				SupportedNIPs []any
-				Software      string
-				Version       string
-				Icon          string
-				Banner        string
-				ServiceURL    string
+				Name           string
+				Description    string
+				PubKey         string
+				PubKeyNPub     string
+				Contact        string
+				ContactHref    string
+				ContactIsLink  bool
+				SoftwareHref   string
+				SoftwareIsLink bool
+				SupportedNIPs  []any
+				Software       string
+				Version        string
+				Icon           string
+				Banner         string
+				ServiceURL     string
 			}{
-				Name:          r.Info.Name,
-				Description:   r.Info.Description,
-				PubKey:        r.Info.PubKey,
-				PubKeyNPub:    "",
-				Contact:       r.Info.Contact,
-				ContactHref:   "",
-				ContactIsLink: false,
-				SupportedNIPs: r.Info.SupportedNIPs,
-				Software:      r.Info.Software,
-				Version:       r.Info.Version,
-				Icon:          r.Info.Icon,
-				Banner:        r.Info.Banner,
-				ServiceURL:    r.ServiceURL,
+				Name:           r.Info.Name,
+				Description:    r.Info.Description,
+				PubKey:         r.Info.PubKey,
+				PubKeyNPub:     "",
+				Contact:        r.Info.Contact,
+				ContactHref:    "",
+				ContactIsLink:  false,
+				SoftwareHref:   "",
+				SoftwareIsLink: false,
+				SupportedNIPs:  r.Info.SupportedNIPs,
+				Software:       r.Info.Software,
+				Version:        r.Info.Version,
+				Icon:           r.Info.Icon,
+				Banner:         r.Info.Banner,
+				ServiceURL:     r.ServiceURL,
 			}
 
 			// compute contact link if it's an email or nostr nip19 pub/profile
@@ -240,6 +244,15 @@ func main() {
 					// treat as email
 					vm.ContactHref = "mailto:" + c
 					vm.ContactIsLink = true
+				}
+			}
+
+			// software link detection (http/https)
+			if vm.Software != "" {
+				s := strings.TrimSpace(vm.Software)
+				if strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://") {
+					vm.SoftwareHref = s
+					vm.SoftwareIsLink = true
 				}
 			}
 

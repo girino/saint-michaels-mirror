@@ -75,7 +75,7 @@
       </div>
       <div class="card">
         <div class="k">Software / Version</div>
-        <div class="v">{{.Software}} — {{.Version}}</div>
+        <div class="v">{{if .SoftwareIsLink}}<a class="v" href="{{.SoftwareHref}}" target="_blank" rel="noopener">{{.Software}}</a>{{else}}{{.Software}}{{end}} — {{.Version}}</div>
       </div>
       <div class="card">
         <div class="k">Supported NIPs</div>
