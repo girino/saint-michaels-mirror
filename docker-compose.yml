@@ -2,8 +2,7 @@ version: '3.8'
 services:
   relay:
     build: .
-    image: "${IMAGE_NAME:-girino/khatru-relay:rc2}"
-    container_name: "${CONTAINER_NAME:-khatru-relay}"
+    image: "${IMAGE_NAME:-girino/khatru-relay:v1.0.0-dev}"
     restart: unless-stopped
     # Load variables from .env in repo root; docker-compose also reads .env automatically,
     # but specifying env_file keeps intent explicit and works for some CI setups.
@@ -11,7 +10,6 @@ services:
     environment:
       # Force the internal listener address to :3337 (container-internal).
       ADDR: ":3337"
-      RELAY_NAME: "${RELAY_NAME:-Espelho de São Miguel}"
     # Use COMPOSE_RELAY_PORT to control the host port mapping. Container listens on 3337.
     ports:
       - "${COMPOSE_RELAY_PORT:-3337}:3337" # host:container
