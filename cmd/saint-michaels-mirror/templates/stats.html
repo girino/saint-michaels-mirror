@@ -36,8 +36,126 @@
       </div>
     </header>
 
-    <div id="stats-content">
-      <div class="loading">Loading statistics...</div>
+    <div id="loading" class="loading">Loading statistics...</div>
+    
+    <div id="error" class="error" style="display: none;">
+      <div id="error-message"></div>
+    </div>
+
+    <div id="stats-content" class="stats-container" style="display: none;">
+      <div class="stat-card">
+        <div class="stat-title">Application</div>
+        <div class="stat-item">
+          <span class="stat-label">Version</span>
+          <span class="stat-value" id="app-version">-</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Uptime</span>
+          <span class="stat-value" id="app-uptime">-</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Goroutines</span>
+          <span class="stat-value" id="app-goroutines">-</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Memory Used</span>
+          <span class="stat-value" id="app-memory-used">-</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Memory Total</span>
+          <span class="stat-value" id="app-memory-total">-</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">GC Cycles</span>
+          <span class="stat-value" id="app-gc-cycles">-</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-title">Relay Operations</div>
+        <div class="stat-item">
+          <span class="stat-label">Publish Attempts</span>
+          <span class="stat-value" id="relay-publish-attempts">-</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Publish Successes</span>
+          <span class="stat-value" id="relay-publish-successes">-</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Publish Failures</span>
+          <span class="stat-value" id="relay-publish-failures">-</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Query Requests</span>
+          <span class="stat-value" id="relay-query-requests">-</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Query Events Returned</span>
+          <span class="stat-value" id="relay-query-events">-</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Count Requests</span>
+          <span class="stat-value" id="relay-count-requests">-</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-title">Health Status</div>
+        <div class="stat-item">
+          <span class="stat-label">Overall Health</span>
+          <span class="stat-value">
+            <span class="health-indicator" id="health-overall">-</span>
+          </span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Publish Health</span>
+          <span class="stat-value">
+            <span class="health-indicator" id="health-publish">-</span>
+          </span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Query Health</span>
+          <span class="stat-value">
+            <span class="health-indicator" id="health-query">-</span>
+          </span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Consecutive Publish Failures</span>
+          <span class="stat-value" id="health-publish-failures">-</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Consecutive Query Failures</span>
+          <span class="stat-value" id="health-query-failures">-</span>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-title">Performance</div>
+        <div class="stat-item">
+          <span class="stat-label">Avg Publish Duration</span>
+          <span class="stat-value" id="perf-publish-avg">-</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Avg Query Duration</span>
+          <span class="stat-value" id="perf-query-avg">-</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Avg Count Duration</span>
+          <span class="stat-value" id="perf-count-avg">-</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Total Publish Time</span>
+          <span class="stat-value" id="perf-publish-total">-</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Total Query Time</span>
+          <span class="stat-value" id="perf-query-total">-</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Total Count Time</span>
+          <span class="stat-value" id="perf-count-total">-</span>
+        </div>
+      </div>
     </div>
 
     <div class="refresh-info">
@@ -45,187 +163,6 @@
     </div>
   </div>
 
-  <script>
-    let refreshInterval;
-
-    function formatBytes(bytes) {
-      if (bytes === 0) return '0 B';
-      const k = 1024;
-      const sizes = ['B', 'KB', 'MB', 'GB'];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    }
-
-    function formatDuration(ms) {
-      if (ms === 0) return '0 ms';
-      if (ms < 1000) return ms.toFixed(1) + ' ms';
-      return (ms / 1000).toFixed(2) + ' s';
-    }
-
-    function getHealthClass(state) {
-      switch(state) {
-        case 'GREEN': return 'health-green';
-        case 'YELLOW': return 'health-yellow';
-        case 'RED': return 'health-red';
-        default: return 'health-green';
-      }
-    }
-
-    function updateLastUpdated() {
-      const now = new Date();
-      document.getElementById('last-updated').textContent = now.toLocaleTimeString();
-    }
-
-    async function loadStats() {
-      try {
-        const response = await fetch('/api/v1/stats');
-        if (!response.ok) throw new Error('Failed to fetch stats');
-        const data = await response.json();
-        
-        const content = document.getElementById('stats-content');
-        content.innerHTML = `
-          <div class="stats-container">
-            <div class="stat-card">
-              <div class="stat-title">Application</div>
-              <div class="stat-item">
-                <span class="stat-label">Version</span>
-                <span class="stat-value">${data.app.version}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Uptime</span>
-                <span class="stat-value">${Math.floor(data.app.uptime / 60)}m ${Math.floor(data.app.uptime % 60)}s</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Goroutines</span>
-                <span class="stat-value">${data.app.goroutines}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Memory Used</span>
-                <span class="stat-value">${formatBytes(data.app.memory.heap_alloc_bytes)}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Memory Total</span>
-                <span class="stat-value">${formatBytes(data.app.memory.sys_bytes)}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">GC Cycles</span>
-                <span class="stat-value">${data.app.gc.cycles}</span>
-              </div>
-            </div>
-
-            <div class="stat-card">
-              <div class="stat-title">Relay Operations</div>
-              <div class="stat-item">
-                <span class="stat-label">Publish Attempts</span>
-                <span class="stat-value">${data.relay.publish_attempts}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Publish Successes</span>
-                <span class="stat-value">${data.relay.publish_successes}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Publish Failures</span>
-                <span class="stat-value">${data.relay.publish_failures}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Query Requests</span>
-                <span class="stat-value">${data.relay.query_requests}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Query Events Returned</span>
-                <span class="stat-value">${data.relay.query_events_returned}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Count Requests</span>
-                <span class="stat-value">${data.relay.count_requests}</span>
-              </div>
-            </div>
-
-            <div class="stat-card">
-              <div class="stat-title">Health Status</div>
-              <div class="stat-item">
-                <span class="stat-label">Overall Health</span>
-                <span class="stat-value">
-                  <span class="health-indicator ${getHealthClass(data.relay.main_health_state)}">
-                    ${data.relay.main_health_state}
-                  </span>
-                </span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Publish Health</span>
-                <span class="stat-value">
-                  <span class="health-indicator ${getHealthClass(data.relay.publish_health_state)}">
-                    ${data.relay.publish_health_state}
-                  </span>
-                </span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Query Health</span>
-                <span class="stat-value">
-                  <span class="health-indicator ${getHealthClass(data.relay.query_health_state)}">
-                    ${data.relay.query_health_state}
-                  </span>
-                </span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Consecutive Publish Failures</span>
-                <span class="stat-value">${data.relay.consecutive_publish_failures}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Consecutive Query Failures</span>
-                <span class="stat-value">${data.relay.consecutive_query_failures}</span>
-              </div>
-            </div>
-
-            <div class="stat-card">
-              <div class="stat-title">Performance</div>
-              <div class="stat-item">
-                <span class="stat-label">Avg Publish Duration</span>
-                <span class="stat-value">${formatDuration(data.relay.average_publish_duration_ms)}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Avg Query Duration</span>
-                <span class="stat-value">${formatDuration(data.relay.average_query_duration_ms)}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Avg Count Duration</span>
-                <span class="stat-value">${formatDuration(data.relay.average_count_duration_ms)}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Total Publish Time</span>
-                <span class="stat-value">${formatDuration(data.relay.total_publish_duration_ms)}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Total Query Time</span>
-                <span class="stat-value">${formatDuration(data.relay.total_query_duration_ms)}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Total Count Time</span>
-                <span class="stat-value">${formatDuration(data.relay.total_count_duration_ms)}</span>
-              </div>
-            </div>
-          </div>
-        `;
-        
-        updateLastUpdated();
-      } catch (error) {
-        const content = document.getElementById('stats-content');
-        content.innerHTML = `<div class="error">Failed to load statistics: ${error.message}</div>`;
-      }
-    }
-
-    // Load stats immediately
-    loadStats();
-
-    // Set up auto-refresh every 5 seconds
-    refreshInterval = setInterval(loadStats, 5000);
-
-    // Clean up on page unload
-    window.addEventListener('beforeunload', () => {
-      if (refreshInterval) {
-        clearInterval(refreshInterval);
-      }
-    });
-  </script>
+  <script src="/static/js/stats-page.js"></script>
 </body>
 </html>

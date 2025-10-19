@@ -36,12 +36,99 @@
       </div>
     </header>
 
-    <div id="overall-status" class="overall-status">
-      <div class="loading">Loading health status...</div>
+    <div id="loading" class="loading">Loading health status...</div>
+    
+    <div id="error" class="error" style="display: none;">
+      <div id="error-message"></div>
     </div>
 
-    <div id="health-content">
-      <div class="loading">Loading health details...</div>
+    <div id="overall-status" class="overall-status" style="display: none;">
+      <h2>
+        <span class="health-indicator status-healthy">
+          HEALTHY
+        </span>
+      </h2>
+      <p>Espelho de São Miguel v1.0.0</p>
+    </div>
+
+    <div id="health-content" class="health-container" style="display: none;">
+      <div class="health-card">
+        <div class="health-title">Service Information</div>
+        <div class="health-item">
+          <span class="health-label">Service Name</span>
+          <span class="health-value" id="service-name">-</span>
+        </div>
+        <div class="health-item">
+          <span class="health-label">Version</span>
+          <span class="health-value" id="service-version">-</span>
+        </div>
+        <div class="health-item">
+          <span class="health-label">Overall Status</span>
+          <span class="health-value">
+            <span class="health-indicator" id="service-status">-</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="health-card">
+        <div class="health-title">Health Indicators</div>
+        <div class="health-item">
+          <span class="health-label">Main Health State</span>
+          <span class="health-value">
+            <span class="health-indicator" id="main-health">-</span>
+          </span>
+        </div>
+        <div class="health-item">
+          <span class="health-label">Publish Health</span>
+          <span class="health-value">
+            <span class="health-indicator" id="publish-health">-</span>
+          </span>
+        </div>
+        <div class="health-item">
+          <span class="health-label">Query Health</span>
+          <span class="health-value">
+            <span class="health-indicator" id="query-health">-</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="health-card">
+        <div class="health-title">Failure Tracking</div>
+        <div class="health-item">
+          <span class="health-label">Consecutive Publish Failures</span>
+          <span class="health-value" id="publish-failures">-</span>
+        </div>
+        <div class="health-item">
+          <span class="health-label">Consecutive Query Failures</span>
+          <span class="health-value" id="query-failures">-</span>
+        </div>
+        <div class="health-item">
+          <span class="health-label">Failure Threshold</span>
+          <span class="health-value">10 failures</span>
+        </div>
+      </div>
+
+      <div class="health-card">
+        <div class="health-title">Health Legend</div>
+        <div class="health-item">
+          <span class="health-label">
+            <span class="health-indicator health-green">GREEN</span>
+          </span>
+          <span class="health-value">No failures</span>
+        </div>
+        <div class="health-item">
+          <span class="health-label">
+            <span class="health-indicator health-yellow">YELLOW</span>
+          </span>
+          <span class="health-value">1-9 failures</span>
+        </div>
+        <div class="health-item">
+          <span class="health-label">
+            <span class="health-indicator health-red">RED</span>
+          </span>
+          <span class="health-value">10+ failures</span>
+        </div>
+      </div>
     </div>
 
     <div class="refresh-info">
@@ -49,170 +136,6 @@
     </div>
   </div>
 
-  <script>
-    let refreshInterval;
-
-    function getHealthClass(state) {
-      switch(state) {
-        case 'GREEN': return 'health-green';
-        case 'YELLOW': return 'health-yellow';
-        case 'RED': return 'health-red';
-        default: return 'health-green';
-      }
-    }
-
-    function getStatusClass(status) {
-      switch(status) {
-        case 'healthy': return 'status-healthy';
-        case 'degraded': return 'status-degraded';
-        case 'unhealthy': return 'status-unhealthy';
-        default: return 'status-healthy';
-      }
-    }
-
-    function updateLastUpdated() {
-      const now = new Date();
-      document.getElementById('last-updated').textContent = now.toLocaleTimeString();
-    }
-
-    async function loadHealth() {
-      try {
-        const response = await fetch('/api/v1/health');
-        if (!response.ok) throw new Error('Failed to fetch health status');
-        const data = await response.json();
-        
-        // Update overall status
-        const overallStatus = document.getElementById('overall-status');
-        overallStatus.innerHTML = `
-          <h2>
-            <span class="health-indicator ${getStatusClass(data.status)}">
-              ${data.status.toUpperCase()}
-            </span>
-          </h2>
-          <p>${data.service} v${data.version}</p>
-        `;
-
-        // Update health details
-        const content = document.getElementById('health-content');
-        content.innerHTML = `
-          <div class="health-container">
-            <div class="health-card">
-              <div class="health-title">Service Information</div>
-              <div class="health-item">
-                <span class="health-label">Service Name</span>
-                <span class="health-value">${data.service}</span>
-              </div>
-              <div class="health-item">
-                <span class="health-label">Version</span>
-                <span class="health-value">${data.version}</span>
-              </div>
-              <div class="health-item">
-                <span class="health-label">Overall Status</span>
-                <span class="health-value">
-                  <span class="health-indicator ${getStatusClass(data.status)}">
-                    ${data.status}
-                  </span>
-                </span>
-              </div>
-            </div>
-
-            <div class="health-card">
-              <div class="health-title">Health Indicators</div>
-              <div class="health-item">
-                <span class="health-label">Main Health State</span>
-                <span class="health-value">
-                  <span class="health-indicator ${getHealthClass(data.main_health_state)}">
-                    ${data.main_health_state}
-                  </span>
-                </span>
-              </div>
-              <div class="health-item">
-                <span class="health-label">Publish Health</span>
-                <span class="health-value">
-                  <span class="health-indicator ${getHealthClass(data.publish_health_state)}">
-                    ${data.publish_health_state}
-                  </span>
-                </span>
-              </div>
-              <div class="health-item">
-                <span class="health-label">Query Health</span>
-                <span class="health-value">
-                  <span class="health-indicator ${getHealthClass(data.query_health_state)}">
-                    ${data.query_health_state}
-                  </span>
-                </span>
-              </div>
-            </div>
-
-            <div class="health-card">
-              <div class="health-title">Failure Tracking</div>
-              <div class="health-item">
-                <span class="health-label">Consecutive Publish Failures</span>
-                <span class="health-value">${data.consecutive_publish_failures}</span>
-              </div>
-              <div class="health-item">
-                <span class="health-label">Consecutive Query Failures</span>
-                <span class="health-value">${data.consecutive_query_failures}</span>
-              </div>
-              <div class="health-item">
-                <span class="health-label">Failure Threshold</span>
-                <span class="health-value">10 failures</span>
-              </div>
-            </div>
-
-            <div class="health-card">
-              <div class="health-title">Health Legend</div>
-              <div class="health-item">
-                <span class="health-label">
-                  <span class="health-indicator health-green">GREEN</span>
-                </span>
-                <span class="health-value">No failures</span>
-              </div>
-              <div class="health-item">
-                <span class="health-label">
-                  <span class="health-indicator health-yellow">YELLOW</span>
-                </span>
-                <span class="health-value">1-9 failures</span>
-              </div>
-              <div class="health-item">
-                <span class="health-label">
-                  <span class="health-indicator health-red">RED</span>
-                </span>
-                <span class="health-value">10+ failures</span>
-              </div>
-            </div>
-          </div>
-        `;
-        
-        updateLastUpdated();
-      } catch (error) {
-        const overallStatus = document.getElementById('overall-status');
-        overallStatus.innerHTML = `
-          <h2>
-            <span class="health-indicator status-unhealthy">
-              ERROR
-            </span>
-          </h2>
-          <p>Failed to load health status</p>
-        `;
-        
-        const content = document.getElementById('health-content');
-        content.innerHTML = `<div class="error">Failed to load health status: ${error.message}</div>`;
-      }
-    }
-
-    // Load health immediately
-    loadHealth();
-
-    // Set up auto-refresh every 3 seconds
-    refreshInterval = setInterval(loadHealth, 3000);
-
-    // Clean up on page unload
-    window.addEventListener('beforeunload', () => {
-      if (refreshInterval) {
-        clearInterval(refreshInterval);
-      }
-    });
-  </script>
+  <script src="/static/js/health-page.js"></script>
 </body>
 </html>
