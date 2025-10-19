@@ -1,0 +1,41 @@
+version: '3.8'
+
+# Production compose: uses a published image for the relay and runs a Tor service
+# Notes:
+# - Set PROD_IMAGE to your registry image (e.g. ghcr.io/<owner>/<repo>/khatru-relay:1.0.0)
+# - The Tor service below uses dperson/torproxy as an example. Replace with your preferred Tor image if needed.
+# - The tor_data volume persists onion keys so the .onion address remains stable across restarts.
+
+services:
+  relay:
+    image: "${PROD_IMAGE:-ghcr.io/girino/saint-michaels-mirror/khatru-relay:1.0.0}"
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Container listens internally on 3337 (ADDR)
+      ADDR: ":3337"
+    expose:
+      - "3337"
+    networks:
+      - proxy_net
+
+  tor:
+    # example Tor proxy image — you may replace this with a preferred image
+    image: dperson/torproxy:latest
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    # Persist tor data (hidden service keys)
+    volumes:
+      - tor_data:/var/lib/tor
+    # map a hidden service port 80 to relay:3337; adjust flags for your tor image if different
+    command: -s 80:relay:3337 -P 9050
+    networks:
+      - proxy_net
+
+volumes:
+  tor_data:
+
+networks:
+  proxy_net:
+    driver: bridge
