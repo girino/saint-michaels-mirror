@@ -108,8 +108,8 @@ async function loadStats() {
 // Load stats immediately
 loadStats();
 
-// Set up auto-refresh every 5 seconds
-refreshInterval = setInterval(loadStats, 5000);
+// Set up auto-refresh every 10 seconds
+refreshInterval = setInterval(loadStats, 10000);
 
 // Clean up on page unload
 window.addEventListener('beforeunload', () => {

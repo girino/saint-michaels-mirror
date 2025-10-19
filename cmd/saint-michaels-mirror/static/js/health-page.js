@@ -102,8 +102,8 @@ async function loadHealth() {
 // Load health immediately
 loadHealth();
 
-// Set up auto-refresh every 3 seconds
-refreshInterval = setInterval(loadHealth, 3000);
+// Set up auto-refresh every 10 seconds
+refreshInterval = setInterval(loadHealth, 10000);
 
 // Clean up on page unload
 window.addEventListener('beforeunload', () => {

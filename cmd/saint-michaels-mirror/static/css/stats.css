@@ -6,7 +6,7 @@
   margin-top: 20px;
 }
 
-@media(min-width: 768px) {
+@media(min-width: 900px) {
   .stats-container {
     grid-template-columns: 1fr 1fr;
   }
