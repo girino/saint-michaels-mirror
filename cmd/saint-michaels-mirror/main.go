@@ -261,6 +261,7 @@ func main() {
 		Banner         string
 		ServiceURL     string
 		ShowBackLink   bool
+		ProjectName    string
 	}
 
 	// buildViewModel creates a view model from relay info
@@ -282,6 +283,7 @@ func main() {
 			Banner:         r.Info.Banner,
 			ServiceURL:     r.ServiceURL,
 			ShowBackLink:   showBackLink,
+			ProjectName:    ProjectName,
 		}
 
 		// compute contact link if it's an email or nostr nip19 pub/profile
@@ -392,7 +394,7 @@ func main() {
 		log.Fatalf("invalid port: %v", err)
 	}
 
-	log.Printf("Starting Espelho de São Miguel on %s", cfg.Addr)
+	log.Printf("Starting %s on %s", ProjectName, cfg.Addr)
 	if err := r.Start(host, port); err != nil {
 		log.Fatalf("relay exited: %v", err)
 	}
