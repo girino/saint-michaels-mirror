@@ -14,7 +14,6 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: '1.21'
-          cache: 'go'
       - name: Prepare release dir
         run: mkdir -p release
       - name: Build Linux amd64
