@@ -59,6 +59,11 @@ type RelayStore struct {
 	consecutivePublishFailures int64
 	consecutiveQueryFailures   int64
 	maxConsecutiveFailures     int64
+	// timing statistics
+	totalPublishDurationNs int64
+	totalQueryDurationNs   int64
+	publishCount           int64
+	queryCount             int64
 }
 
 // Stats holds runtime counters exported by RelayStore
@@ -86,6 +91,11 @@ type Stats struct {
 	PublishHealthState string `json:"publish_health_state"`
 	QueryHealthState   string `json:"query_health_state"`
 	MainHealthState    string `json:"main_health_state"`
+	// Timing statistics
+	AveragePublishDurationMs float64 `json:"average_publish_duration_ms"`
+	AverageQueryDurationMs   float64 `json:"average_query_duration_ms"`
+	TotalPublishDurationMs   int64   `json:"total_publish_duration_ms"`
+	TotalQueryDurationMs     int64   `json:"total_query_duration_ms"`
 }
 
 // getHealthState determines the health state based on consecutive failures
@@ -126,6 +136,22 @@ func (r *RelayStore) Stats() Stats {
 	queryHealthState := getHealthState(consecutiveQueryFailures)
 	mainHealthState := getWorstHealthState(publishHealthState, queryHealthState)
 
+	// Calculate timing statistics
+	totalPublishDurationNs := atomic.LoadInt64(&r.totalPublishDurationNs)
+	totalQueryDurationNs := atomic.LoadInt64(&r.totalQueryDurationNs)
+	publishCount := atomic.LoadInt64(&r.publishCount)
+	queryCount := atomic.LoadInt64(&r.queryCount)
+
+	var averagePublishDurationMs float64
+	var averageQueryDurationMs float64
+
+	if publishCount > 0 {
+		averagePublishDurationMs = float64(totalPublishDurationNs) / float64(publishCount) / 1e6 // Convert ns to ms
+	}
+	if queryCount > 0 {
+		averageQueryDurationMs = float64(totalQueryDurationNs) / float64(queryCount) / 1e6 // Convert ns to ms
+	}
+
 	return Stats{
 		PublishAttempts:            atomic.LoadInt64(&r.publishAttempts),
 		PublishSuccesses:           atomic.LoadInt64(&r.publishSuccesses),
@@ -147,6 +173,11 @@ func (r *RelayStore) Stats() Stats {
 		PublishHealthState:         publishHealthState,
 		QueryHealthState:           queryHealthState,
 		MainHealthState:            mainHealthState,
+		// Timing statistics
+		AveragePublishDurationMs: averagePublishDurationMs,
+		AverageQueryDurationMs:   averageQueryDurationMs,
+		TotalPublishDurationMs:   totalPublishDurationNs / 1e6, // Convert ns to ms
+		TotalQueryDurationMs:     totalQueryDurationNs / 1e6,   // Convert ns to ms
 	}
 }
 
@@ -356,6 +387,14 @@ func (r *RelayStore) ensureRelay(ctx context.Context, url string) (*nostr.Relay,
 
 // QueryEvents returns an empty, closed channel because this store does not persist events.
 func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan *nostr.Event, error) {
+	// Start timing measurement
+	startTime := time.Now()
+	defer func() {
+		duration := time.Since(startTime)
+		atomic.AddInt64(&r.totalQueryDurationNs, duration.Nanoseconds())
+		atomic.AddInt64(&r.queryCount, 1)
+	}()
+
 	// count total requests
 	atomic.AddInt64(&r.queryRequests, 1)
 
@@ -464,6 +503,14 @@ func (r *RelayStore) DeleteEvent(ctx context.Context, evt *nostr.Event) error {
 
 // SaveEvent forwards the event to all configured remotes. It returns nil if at least one remote accepted the event.
 func (r *RelayStore) SaveEvent(ctx context.Context, evt *nostr.Event) error {
+	// Start timing measurement
+	startTime := time.Now()
+	defer func() {
+		duration := time.Since(startTime)
+		atomic.AddInt64(&r.totalPublishDurationNs, duration.Nanoseconds())
+		atomic.AddInt64(&r.publishCount, 1)
+	}()
+
 	// publish to all remotes concurrently and collect errors
 	var wg sync.WaitGroup
 	errsMu := sync.Mutex{}
