@@ -184,8 +184,7 @@ func (r *RelayStore) ensureRelay(ctx context.Context, url string) (*nostr.Relay,
 
 // QueryEvents returns an empty, closed channel because this store does not persist events.
 func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan *nostr.Event, error) {
-	// count total requests
-	atomic.AddInt64(&r.queryRequests, 1)
+	// count total requests (count-specific only)
 	atomic.AddInt64(&r.countRequests, 1)
 
 	// If khatru explicitly marked this as an internal call, short-circuit.
@@ -375,7 +374,6 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 
 	// short-circuit khatru internal calls
 	if khatru.IsInternalCall(ctx) {
-		atomic.AddInt64(&r.queryInternal, 1)
 		atomic.AddInt64(&r.countInternal, 1)
 		if r.Verbose {
 			log.Printf("[relaystore][DEBUG] internal count short-circuited (khatru internal call) filter=%+v", filter)
@@ -385,7 +383,6 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 
 	// same adding.go special-case as QueryEvents
 	if isAddingKind5Filter(filter) && ctx.Value(1) == nil {
-		atomic.AddInt64(&r.queryInternal, 1)
 		atomic.AddInt64(&r.countInternal, 1)
 		if r.Verbose {
 			log.Printf("[relaystore][DEBUG] internal count short-circuited (adding.go kind=5 #e, no ctx[1]) filter=%+v", filter)
@@ -393,7 +390,6 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 		return 0, nil
 	}
 
-	atomic.AddInt64(&r.queryExternal, 1)
 	atomic.AddInt64(&r.countExternal, 1)
 
 	if r.pool == nil {
@@ -413,7 +409,6 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 			continue
 		}
 		if _, err := r.pool.EnsureRelay(q); err != nil {
-			atomic.AddInt64(&r.queryFailures, 1)
 			atomic.AddInt64(&r.countFailures, 1)
 			if r.Verbose {
 				log.Printf("[relaystore][WARN] failed to ensure query relay %s: %v", q, err)
@@ -424,7 +419,6 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 	// use CountMany which aggregates counts across relays (NIP-45 HyperLogLog)
 	cnt := r.pool.CountMany(ctx, r.queryUrls, filter, nil)
 	if cnt > 0 {
-		atomic.AddInt64(&r.queryEventsReturned, int64(cnt))
 		atomic.AddInt64(&r.countEventsReturned, int64(cnt))
 	}
 	return int64(cnt), nil
