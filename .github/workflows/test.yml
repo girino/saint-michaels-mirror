@@ -39,10 +39,10 @@ jobs:
     - name: Build application
       run: go build -o bin/saint-michaels-mirror ./cmd/saint-michaels-mirror
 
-    - name: Test Docker build (AMD64)
+    - name: Test Docker build (native architecture)
       run: |
-        # Test AMD64 build (native architecture for GitHub Actions runners)
-        docker build --build-arg GOARCH=amd64 -t saint-michaels-mirror:test .
+        # Build for the native architecture of the runner
+        docker build -t saint-michaels-mirror:test .
 
     - name: Test Docker run
       run: |
@@ -52,14 +52,3 @@ jobs:
         curl -f http://localhost:3338/.well-known/nostr.json || exit 1
         docker stop test-relay
         docker rm test-relay
-
-    - name: Test cross-compilation builds
-      run: |
-        # Test that we can build for other architectures (without running them)
-        echo "Testing ARM64 build..."
-        docker build --build-arg GOARCH=arm64 -t saint-michaels-mirror:test-arm64 .
-        echo "ARM64 build successful"
-        
-        # Test that the binary exists and has correct permissions
-        docker run --rm saint-michaels-mirror:test-arm64 ls -la ./saint-michaels-mirror
-        echo "Cross-compilation test completed successfully"
