@@ -26,22 +26,20 @@ services:
       start_period: 40s
 
   tor:
-    # Standard Tor image with custom configuration
-    image: alpine/tor:latest
+    # Tor hidden service image
+    image: goldy/tor-hidden-service:latest
     restart: unless-stopped
-    # Persist tor data (hidden service keys)
+    # Environment variables for Tor configuration
+    environment:
+      # Hidden service configuration
+      # Syntax: {SERVICE}_TOR_SERVICE_HOSTS=port:target:targetport
+      - RELAY_TOR_SERVICE_HOSTS=80:relay:3337
+      - RELAY_TOR_SERVICE_VERSION=3
+      # Enable SOCKS proxy for health check
+      - TOR_SOCKS_PORT=9050
     volumes:
-      - tor_data:/var/lib/tor
-    # Custom Tor configuration
-    command: |
-      sh -c '
-      cat > /etc/tor/torrc << EOF
-      SocksPort 9050
-      HiddenServiceDir /var/lib/tor/hidden_service/relay/
-      HiddenServicePort 80 relay:3337
-      EOF
-      exec tor -f /etc/tor/torrc
-      '
+      # Persist Tor hidden service keys
+      - tor_data:/var/lib/tor/hidden_service/
     networks:
       - proxy_net
     healthcheck:
