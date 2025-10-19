@@ -91,7 +91,9 @@ These counters are surfaced in `/stats` for monitoring and transparency (the "Ib
 - Pull requests welcome. Please follow Go project conventions. Tests for relay logic (especially the short-circuiting of internal QueryEvents and NIP-11 gating for CountMany) are highly appreciated.
 
 ## License
-This repository is released under the license listed in `LICENSE` (if present). If you add proprietary assets, document licensing in `/assets/LICENSE`.
+This repository is released under the Girino Anarchist Licence (GAL). The full text is included in `LICENSE` and is also available at https://license.girino.org/. The `LICENSE` file year was updated to 2003-2025.
+
+Note: the GAL is a nonstandard, humorous license with unusual conditions; treat its terms accordingly.
 
 ---
 _Espelho de São Miguel — the mirror that returns light as truth._
