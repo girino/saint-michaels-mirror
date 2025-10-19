@@ -40,16 +40,45 @@ jobs:
         with:
           name: khatru-relay-${{ github.ref_name }}
           path: release/
-      - name: Create GitHub Release
+      - name: Get or create GitHub Release
         id: create_release
-        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref_name }}
-          release_name: ${{ github.ref_name }}
-          draft: false
-          prerelease: ${{ contains(github.ref_name, '-rc') }}
+        run: |
+          set -euo pipefail
+          TAG="${{ github.ref_name }}"
+          API="https://api.github.com/repos/${{ github.repository }}"
+          # Ensure jq is available
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update -y
+            sudo apt-get install -y jq
+          fi
+
+          # Try to GET the release by tag
+          resp_file=$(mktemp)
+          http_code=$(curl -s -w "%{http_code}" -H "Authorization: token $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" -o "$resp_file" "$API/releases/tags/$TAG" || true)
+
+          if [ "$http_code" = "200" ]; then
+            upload_url=$(jq -r .upload_url "$resp_file")
+            echo "Found existing release for $TAG"
+          elif [ "$http_code" = "404" ]; then
+            echo "Release not found, creating release for $TAG"
+            if [[ "$TAG" == *"-rc"* || "$TAG" == *"-rc"* ]]; then
+              prerelease=true
+            else
+              prerelease=false
+            fi
+            body=$(jq -n --arg tag "$TAG" --arg name "$TAG" --argjson prerelease $prerelease '{ tag_name: $tag, name: $name, draft: false, prerelease: $prerelease }')
+            created=$(curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" -d "$body" "$API/releases")
+            upload_url=$(echo "$created" | jq -r .upload_url)
+          else
+            echo "Unexpected response ($http_code) from GitHub API while checking release:" >&2
+            cat "$resp_file" >&2
+            exit 1
+          fi
+
+          # Export upload_url for subsequent steps
+          echo "upload_url=$upload_url" >> "$GITHUB_OUTPUT"
       - name: Archive release artifacts
         run: |
           zip -r release-${{ github.ref_name }}.zip release/
