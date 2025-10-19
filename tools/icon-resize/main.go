@@ -124,6 +124,9 @@ func main() {
 
 	for _, s := range sizes {
 		res := resizeImage(src, s, s)
+		// apply rounded corners: use radius as 18% of the smaller side
+		radius := math.Min(float64(s), float64(s)) * 0.18
+		res = applyRoundedMask(res, radius)
 		out := filepath.Join(outdir, fmt.Sprintf("favicon-%dx%d.png", s, s))
 		of, err := os.Create(out)
 		if err != nil {
