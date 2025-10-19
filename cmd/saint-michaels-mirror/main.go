@@ -334,7 +334,7 @@ func main() {
 	// khatru will serve NIP-11 itself; we only expose metrics here.
 	// parse templates with inheritance (base template + page templates)
 	baseTplPath := "cmd/saint-michaels-mirror/templates/base.html"
-	
+
 	// parse main page template
 	mainTplPath := "cmd/saint-michaels-mirror/templates/index.html"
 	mainTpl, err := template.ParseFiles(baseTplPath, mainTplPath)
