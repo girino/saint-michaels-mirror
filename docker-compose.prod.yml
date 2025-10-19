@@ -8,7 +8,7 @@ version: '3.8'
 
 services:
   relay:
-    image: "${PROD_IMAGE:-ghcr.io/girino/saint-michaels-mirror/khatru-relay:1.0.0}"
+    image: "${PROD_IMAGE:-ghcr.io/girino/saint-michaels-mirror/saint-michaels-mirror:1.0.0}"
     restart: unless-stopped
     env_file: .env
     environment:

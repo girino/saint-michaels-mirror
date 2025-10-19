@@ -2,7 +2,7 @@ version: '3.8'
 services:
   relay:
     build: .
-    image: "${IMAGE_NAME:-girino/khatru-relay:v1.0.0-dev}"
+    image: "${IMAGE_NAME:-girino/saint-michaels-mirror:v1.0.0-dev}"
     restart: unless-stopped
     # Load variables from .env in repo root; docker-compose also reads .env automatically,
     # but specifying env_file keeps intent explicit and works for some CI setups.

@@ -1,4 +1,4 @@
-# Multi-stage Dockerfile for khatru-relay
+# Multi-stage Dockerfile for saint-michaels-mirror
 # Build stage
 FROM golang:1.24.1-bullseye AS builder
 WORKDIR /src
@@ -12,7 +12,7 @@ COPY . .
 
 # Build the relay binary
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -ldflags "-X main.Version=$(cat cmd/khatru-relay/version.go | grep -oP '"\K[^"]+(?=\")')" -o /out/khatru-relay ./cmd/khatru-relay
+    go build -ldflags "-X main.Version=$(cat cmd/saint-michaels-mirror/version.go | grep -oP '"\K[^"]+(?=\")')" -o /out/saint-michaels-mirror ./cmd/saint-michaels-mirror
 
 # Final minimal image
 FROM debian:bookworm-slim
@@ -26,14 +26,14 @@ RUN useradd -m -u 1000 relayuser
 WORKDIR /home/relayuser
 
 # Copy the binary
-COPY --from=builder /out/khatru-relay ./khatru-relay
+COPY --from=builder /out/saint-michaels-mirror ./saint-michaels-mirror
 
 # Copy static files and templates
-COPY --from=builder /src/cmd/khatru-relay/static ./cmd/khatru-relay/static
-COPY --from=builder /src/cmd/khatru-relay/templates ./cmd/khatru-relay/templates
+COPY --from=builder /src/cmd/saint-michaels-mirror/static ./cmd/saint-michaels-mirror/static
+COPY --from=builder /src/cmd/saint-michaels-mirror/templates ./cmd/saint-michaels-mirror/templates
 
 # Set proper ownership
-RUN chown -R relayuser:relayuser ./khatru-relay ./cmd
+RUN chown -R relayuser:relayuser ./saint-michaels-mirror ./cmd
 USER relayuser
 
-ENTRYPOINT ["./khatru-relay"]
+ENTRYPOINT ["./saint-michaels-mirror"]
