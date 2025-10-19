@@ -1,0 +1,138 @@
+/* Health page specific styles */
+.health-container {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+@media(min-width: 768px) {
+  .health-container {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.health-card {
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.03);
+}
+
+.health-title {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 1.1rem;
+  margin-bottom: 12px;
+}
+
+.health-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.health-item:last-child {
+  border-bottom: none;
+}
+
+.health-label {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.health-value {
+  color: var(--white);
+  font-weight: 500;
+}
+
+.health-indicator {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.health-green {
+  background: #22c55e;
+  color: #000;
+}
+
+.health-yellow {
+  background: #eab308;
+  color: #000;
+}
+
+.health-red {
+  background: #ef4444;
+  color: #fff;
+}
+
+.status-healthy {
+  background: #22c55e;
+  color: #000;
+}
+
+.status-degraded {
+  background: #eab308;
+  color: #000;
+}
+
+.status-unhealthy {
+  background: #ef4444;
+  color: #fff;
+}
+
+.loading {
+  text-align: center;
+  color: var(--muted);
+  padding: 20px;
+}
+
+.error {
+  text-align: center;
+  color: #ef4444;
+  padding: 20px;
+}
+
+.refresh-info {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-top: 16px;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 16px;
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.back-link:hover {
+  color: var(--accent-2);
+}
+
+.overall-status {
+  text-align: center;
+  margin: 20px 0;
+  padding: 20px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+  border: 1px solid rgba(255,255,255,0.03);
+}
+
+.overall-status h2 {
+  margin: 0 0 8px 0;
+  font-size: 1.5rem;
+}
+
+.overall-status p {
+  margin: 0;
+  color: var(--muted);
+}
