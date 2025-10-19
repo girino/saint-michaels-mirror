@@ -214,6 +214,13 @@ func main() {
 			}
 
 			// compute contact link if it's an email or nostr nip19 pub/profile
+			if vm.Contact == "" && vm.PubKey != "" {
+				// expose pubkey as npub contact when none provided
+				if npub, err := nip19.EncodePublicKey(vm.PubKey); err == nil && npub != "" {
+					vm.Contact = npub
+				}
+			}
+
 			if vm.Contact != "" {
 				c := strings.TrimSpace(vm.Contact)
 				// npub / nprofile
