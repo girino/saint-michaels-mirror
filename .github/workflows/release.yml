@@ -69,7 +69,14 @@ jobs:
             else
               prerelease=false
             fi
-            body=$(jq -n --arg tag "$TAG" --arg name "$TAG" --argjson prerelease $prerelease '{ tag_name: $tag, name: $name, draft: false, prerelease: $prerelease }')
+            # Load release notes if present
+            notes_file=".github/release-notes/${TAG}.md"
+            if [ -f "$notes_file" ]; then
+              release_body=$(jq -Rs '.' "$notes_file")
+            else
+              release_body="\"\""
+            fi
+            body=$(jq -n --arg tag "$TAG" --arg name "$TAG" --argjson prerelease $prerelease --arg body "$release_body" '{ tag_name: $tag, name: $name, draft: false, prerelease: $prerelease, body: ($body|fromjson) }')
             created=$(curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" -d "$body" "$API/releases")
             upload_url=$(echo "$created" | jq -r .upload_url)
           elif [ "$http_code" = "404" ]; then
@@ -79,7 +86,13 @@ jobs:
             else
               prerelease=false
             fi
-            body=$(jq -n --arg tag "$TAG" --arg name "$TAG" --argjson prerelease $prerelease '{ tag_name: $tag, name: $name, draft: false, prerelease: $prerelease }')
+            notes_file=".github/release-notes/${TAG}.md"
+            if [ -f "$notes_file" ]; then
+              release_body=$(jq -Rs '.' "$notes_file")
+            else
+              release_body="\"\""
+            fi
+            body=$(jq -n --arg tag "$TAG" --arg name "$TAG" --argjson prerelease $prerelease --arg body "$release_body" '{ tag_name: $tag, name: $name, draft: false, prerelease: $prerelease, body: ($body|fromjson) }')
             created=$(curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" -d "$body" "$API/releases")
             upload_url=$(echo "$created" | jq -r .upload_url)
           else
@@ -90,31 +103,29 @@ jobs:
 
           # Export upload_url for subsequent steps
           echo "upload_url=$upload_url" >> "$GITHUB_OUTPUT"
-      - name: Archive release artifacts
-        run: |
-          zip -r release-${{ github.ref_name }}.zip release/
-      - name: Upload release asset (zip) via curl
+      - name: Upload individual binaries via curl
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           UPLOAD_URL="${{ steps.create_release.outputs.upload_url }}"
-          # strip the template part {?name,label}
           UPLOAD_URL="${UPLOAD_URL%%\{*}"
-          ASSET_FILE="release-${{ github.ref_name }}.zip"
-          ASSET_NAME="khatru-relay-${{ github.ref_name }}.zip"
-          echo "Uploading $ASSET_FILE to $UPLOAD_URL?name=$ASSET_NAME"
-          http_status=$(curl -s -o /tmp/upload_resp -w "%{http_code}" \
-            -X POST \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Content-Type: application/zip" \
-            --data-binary @"$ASSET_FILE" \
-            "$UPLOAD_URL?name=$ASSET_NAME")
-          if [ "$http_status" -ge 200 ] && [ "$http_status" -lt 300 ]; then
-            echo "Upload succeeded (HTTP $http_status)"
-            cat /tmp/upload_resp
-          else
-            echo "Upload failed with HTTP status $http_status" >&2
-            cat /tmp/upload_resp >&2 || true
-            exit 1
-          fi
+          cd release
+          for f in *; do
+            [ -f "$f" ] || continue
+            echo "Uploading $f"
+            ASSET_NAME="$f"
+            http_status=$(curl -s -o /tmp/upload_resp -w "%{http_code}" \
+              -X POST \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary @"$f" \
+              "$UPLOAD_URL?name=$ASSET_NAME")
+            if [ "$http_status" -ge 200 ] && [ "$http_status" -lt 300 ]; then
+              echo "Uploaded $f (HTTP $http_status)"
+            else
+              echo "Upload failed for $f (HTTP $http_status)" >&2
+              cat /tmp/upload_resp >&2 || true
+              exit 1
+            fi
+          done

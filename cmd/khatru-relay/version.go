@@ -2,4 +2,4 @@ package main
 
 // Version is the semantic version string used across the relay.
 // Update this value before creating a release.
-const Version = "1.0.0-rc1"
+const Version = "1.0.0-rc2"
