@@ -100,6 +100,29 @@
       </script>
     </section>
 
+    <section style="margin-top:12px" class="card">
+      <div class="k">Relay Stats</div>
+      <details id="stats-details">
+        <summary style="cursor:pointer">Show stats</summary>
+        <pre id="stats" style="white-space:pre-wrap;margin:8px 0 0;color:var(--muted);font-size:0.9rem;background:transparent;border:none;padding:0">(click to load)</pre>
+      </details>
+      <script>
+        document.getElementById('stats-details').addEventListener('toggle', async function(e){
+          if(!this.open) return;
+          const pre = document.getElementById('stats');
+          pre.textContent = 'loading...';
+          try{
+            const resp = await fetch('/stats');
+            if(!resp.ok) throw new Error('failed to fetch');
+            const data = await resp.json();
+            pre.textContent = JSON.stringify(data, null, 2);
+          }catch(err){
+            pre.textContent = 'failed to load stats: '+err;
+          }
+        });
+      </script>
+    </section>
+
     <footer>
       <div>Powered by khatru — NIP-11 relay info shown above.</div>
     </footer>
