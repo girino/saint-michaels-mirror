@@ -239,6 +239,23 @@ a.pill{
   margin-top:18px
 }
 
+/* Back link styling */
+.back-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.9rem;
+  padding: 8px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  display: inline-block;
+  transition: all 0.2s ease;
+}
+
+.back-link:hover {
+  background-color: var(--accent);
+  color: var(--bg);
+}
+
 @media(min-width:900px){
   .foldables{
     grid-template-columns:1fr 1fr

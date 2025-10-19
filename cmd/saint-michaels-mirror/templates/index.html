@@ -1,23 +1,21 @@
 {{define "title"}}NIP-11 Relay Info{{end}}
 
-{{define "content"}}
-    {{if .Banner}}
-      <div style="width:100%;height:160px;margin:-28px -28px 18px;border-top-left-radius:12px;border-top-right-radius:12px;overflow:hidden;box-shadow:inset 0 -30px 60px rgba(0,0,0,0.4)">
-        <img src="{{.Banner}}" alt="banner" style="width:100%;height:100%;object-fit:cover;display:block"/>
-      </div>
-    {{end}}
-    <div style="display:flex;gap:10px;align-items:center;margin-bottom:18px">
-      {{if .ServiceURL}}<a class="pill" href="{{.ServiceURL}}" target="_blank" rel="noopener">Website</a>{{end}}
-      {{if .Contact}}
-        <span class="k">Contact:</span>&nbsp;
-        {{if .ContactIsLink}}
-          <a class="v" href="{{.ContactHref}}" target="_blank" rel="noopener">{{.Contact}}</a>
-        {{else}}
-          <span class="v">{{.Contact}}</span>
-        {{end}}
-      {{end}}
-    </div>
 
+{{define "header-extra"}}
+<div style="display:flex;gap:10px;align-items:center">
+  {{if .ServiceURL}}<a class="pill" href="{{.ServiceURL}}" target="_blank" rel="noopener">Website</a>{{end}}
+  {{if .Contact}}
+    <span class="k">Contact:</span>&nbsp;
+    {{if .ContactIsLink}}
+      <a class="v" href="{{.ContactHref}}" target="_blank" rel="noopener">{{.Contact}}</a>
+    {{else}}
+      <span class="v">{{.Contact}}</span>
+    {{end}}
+  {{end}}
+</div>
+{{end}}
+
+{{define "content"}}
     <div class="meta">
       <div class="card">
         <div class="k">Public key</div>

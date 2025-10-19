@@ -260,10 +260,11 @@ func main() {
 		Icon           string
 		Banner         string
 		ServiceURL     string
+		ShowBackLink   bool
 	}
 
 	// buildViewModel creates a view model from relay info
-	buildViewModel := func() ViewModel {
+	buildViewModel := func(showBackLink bool) ViewModel {
 		vm := ViewModel{
 			Name:           r.Info.Name,
 			Description:    r.Info.Description,
@@ -280,6 +281,7 @@ func main() {
 			Icon:           r.Info.Icon,
 			Banner:         r.Info.Banner,
 			ServiceURL:     r.ServiceURL,
+			ShowBackLink:   showBackLink,
 		}
 
 		// compute contact link if it's an email or nostr nip19 pub/profile
@@ -343,7 +345,7 @@ func main() {
 	}
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-		vm := buildViewModel()
+		vm := buildViewModel(false) // Main page doesn't show back link
 		renderTemplate(w, mainTpl, vm, "main")
 	})
 
@@ -354,7 +356,7 @@ func main() {
 		log.Fatalf("failed to parse stats template %s: %v", statsTplPath, err)
 	}
 	mux.HandleFunc("/stats", func(w http.ResponseWriter, req *http.Request) {
-		vm := buildViewModel()
+		vm := buildViewModel(true) // Stats page shows back link
 		renderTemplate(w, statsTpl, vm, "stats")
 	})
 
@@ -365,7 +367,7 @@ func main() {
 		log.Fatalf("failed to parse health template %s: %v", healthTplPath, err)
 	}
 	mux.HandleFunc("/health", func(w http.ResponseWriter, req *http.Request) {
-		vm := buildViewModel()
+		vm := buildViewModel(true) // Health page shows back link
 		renderTemplate(w, healthTpl, vm, "health")
 	})
 
