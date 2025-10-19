@@ -18,6 +18,13 @@ import (
 	"github.com/nbd-wtf/go-nostr"
 )
 
+// Health state constants
+const (
+	HealthGreen  = "GREEN"
+	HealthYellow = "YELLOW"
+	HealthRed    = "RED"
+)
+
 // RelayStore forwards events to a set of remote nostr relays. It does not persist events locally.
 type RelayStore struct {
 	urls   []string
@@ -75,6 +82,31 @@ type Stats struct {
 	ConsecutiveQueryFailures   int64  `json:"consecutive_query_failures"`
 	IsHealthy                  bool   `json:"is_healthy"`
 	HealthStatus               string `json:"health_status"`
+	// Detailed health indicators
+	PublishHealthState string `json:"publish_health_state"`
+	QueryHealthState   string `json:"query_health_state"`
+	MainHealthState    string `json:"main_health_state"`
+}
+
+// getHealthState determines the health state based on consecutive failures
+func getHealthState(consecutiveFailures int64) string {
+	if consecutiveFailures == 0 {
+		return HealthGreen
+	} else if consecutiveFailures < 10 {
+		return HealthYellow
+	}
+	return HealthRed
+}
+
+// getWorstHealthState returns the worst health state between two states
+func getWorstHealthState(state1, state2 string) string {
+	if state1 == HealthRed || state2 == HealthRed {
+		return HealthRed
+	}
+	if state1 == HealthYellow || state2 == HealthYellow {
+		return HealthYellow
+	}
+	return HealthGreen
 }
 
 // Stats returns a snapshot of the RelayStore counters
@@ -88,6 +120,11 @@ func (r *RelayStore) Stats() Stats {
 	if !isHealthy {
 		healthStatus = "unhealthy"
 	}
+
+	// Determine individual health states
+	publishHealthState := getHealthState(consecutivePublishFailures)
+	queryHealthState := getHealthState(consecutiveQueryFailures)
+	mainHealthState := getWorstHealthState(publishHealthState, queryHealthState)
 
 	return Stats{
 		PublishAttempts:            atomic.LoadInt64(&r.publishAttempts),
@@ -107,6 +144,9 @@ func (r *RelayStore) Stats() Stats {
 		ConsecutiveQueryFailures:   consecutiveQueryFailures,
 		IsHealthy:                  isHealthy,
 		HealthStatus:               healthStatus,
+		PublishHealthState:         publishHealthState,
+		QueryHealthState:           queryHealthState,
+		MainHealthState:            mainHealthState,
 	}
 }
 
