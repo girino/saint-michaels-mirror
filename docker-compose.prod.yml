@@ -26,16 +26,14 @@ services:
       start_period: 40s
 
   tor:
-    # Tor proxy image for hidden services
-    image: goldy/tor-hidden-service:latest
+    # Tor proxy image for hidden services and SOCKS proxy
+    image: dperson/torproxy:latest
     restart: unless-stopped
     # Persist tor data (hidden service keys)
     volumes:
       - tor_data:/var/lib/tor
-    # Environment variables for hidden service configuration
-    environment:
-      - TOR_SERVICE_HOSTS=80:relay:3337
-      - TOR_PROXY_PORT=9050
+    # Configure Tor with hidden service and SOCKS proxy
+    command: ["-s", "80:relay:3337", "-P", "9050"]
     networks:
       - proxy_net
     healthcheck:
