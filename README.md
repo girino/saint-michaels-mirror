@@ -1,102 +1,272 @@
-# Espelho de São Miguel — Relay Agregator
+# Espelho de São Miguel
 
-The Espelho de São Miguel is a Nostr relay built on khatru that acts as a mirror and aggregator for relayed events. Its name and brand follow a small myth:
+[![License: GAL](https://img.shields.io/badge/License-GAL-blue.svg)](https://license.girino.org/)
+[![Docker Image](https://img.shields.io/badge/Docker-ghcr.io%2Fgirino%2Fsaint--michaels--mirror-blue)](https://github.com/girino/saint-michaels-mirror/pkgs/container/saint-michaels-mirror)
+[![Go Version](https://img.shields.io/badge/Go-1.24.1-blue.svg)](https://golang.org/)
 
-> The Espelho de São Miguel is the sacred mirror that stands between worlds, where every message is received, reflected, and transmitted without distortion under the Archangel’s vigilant gaze. It unites the power of Exu, opener of paths, with the harmony of Ibeji, the divine twins, ensuring that all light crossing its surface returns as truth.
+> The sacred mirror that stands between worlds, where every message is received, reflected, and transmitted without distortion under the Archangel's vigilant gaze.
 
-This README explains what the project does, how it models the "mirror" metaphor in technical terms, and how to configure and run the relay.
+**Espelho de São Miguel** is a Nostr relay aggregator built on the [khatru](https://github.com/fiatjaf/khatru) framework. It acts as a mirror between worlds, forwarding events between multiple Nostr relays while providing a unified interface for Nostr applications.
 
-## Conceptual mapping — myth → implementation
-- Mirror: published events are accepted and forwarded (mirrored) to a set of configured remote relays. The relay attempts to faithfully transmit events without modification.
-- Archangel (messenger): the Archangel represents the relay's role as a messenger from a higher authority — the relay's job is to receive and relay messages faithfully. The Archangel metaphor emphasizes reliable, accountable transmission and signing of metadata when configured.
-- Ibeji (the twins, copying and distribution): the Ibeji twins symbolize mirroring and duplication — the relay's copying behavior (forwarding, merging responses and returning mirrored results). In Afro‑Brazilian syncretism the twins are associated with Cosme e Damião and the practice of giving out candies to children; metaphorically this maps to the relay's role in distributing events and copies to connected clients and remotes — offerings shared with the community.
-- Exu (opener of paths and messenger of the orixás): Exu represents the opening of outgoing paths and the relay's active role in speaking to other relays. In the mythic mapping Exu is associated with the messenger function of Saint Michael and the practical network actions: probing remote endpoints and discovering their capabilities (NIP-11).
+## 🌟 Features
 
-## Key behaviors (what Espelho does)
-- Accepts incoming PUBLISH messages and forwards them (mirrors) to the configured list of `PUBLISH_REMOTES`.
-- Answers REQ (query) requests by querying configured `QUERY_REMOTES` and returning results to clients.
-- Probes remote relays' root (`/`) with the header `Accept: application/nostr+json` to read NIP-11 metadata and determine if a remote supports NIP-45 (counting). The relay only uses CountMany against remotes that advertise NIP-45.
-- Prevents forwarding of khatru internal QueryEvents (except the exact internal filter adding.kind=5/#e) to avoid leaking internal bookkeeping queries.
+- **🔄 Event Aggregation**: Forwards published events to multiple remote relays
+- **🔍 Query Unification**: Queries multiple relays and merges results for clients
+- **📊 Real-time Monitoring**: Live statistics and health monitoring dashboard
+- **🐳 Docker Ready**: Complete Docker Compose setup for easy deployment
+- **🌐 Web Interface**: Modern, responsive web interface with NIP-11 compliance
+- **⚡ High Performance**: Concurrent processing with atomic metrics collection
+- **🔒 Security Focused**: Comprehensive health checks and failure tracking
+- **📱 Multi-Platform**: Binaries for Linux, macOS, and Windows (AMD64/ARM64)
 
-## Quickstart — configuration
-Copy or edit the supplied `.env` or `example.env` as needed. The important variables are:
+## 🚀 Quick Start
 
-- `QUERY_REMOTES` — comma-separated list of wss:// or ws:// remotes used to answer REQ queries.
-- `PUBLISH_REMOTES` — comma-separated list of remotes used to forward PUBLISH events (if used).
-- `ADDR` — address to listen on (default `:3337`).
-- `VERBOSE` — set `1` to enable verbose logging.
-- `RELAY_SERVICE_URL` — base URL advertised in NIP-11 (optional).
-- `RELAY_NAME` — display name; in this project set to `Espelho de São Miguel` by default.
-- `RELAY_DESCRIPTION` — a short blurb; the mythic paragraph above is used in `.env` by default.
-- `RELAY_CONTACT` — contact `npub` for the relay maintainer.
-- `RELAY_SECKEY` — relay secret key (nsec bech32 or hex) used for signing NIP-11 metadata when present.
-- `RELAY_ICON` / `RELAY_BANNER` — paths to static assets served under `/static/`.
-
-Example (already included in the repo as `.env`):
-
-```
-QUERY_REMOTES=wss://wot.girino.org,wss://nostr.girino.org
-ADDR=:3337
-VERBOSE=1
-RELAY_SERVICE_URL=https://agregator.girino.org
-RELAY_NAME="Espelho de São Miguel"
-RELAY_DESCRIPTION="The Espelho de São Miguel is the sacred mirror..."
-RELAY_CONTACT=npub18... (your contact npub)
-RELAY_SECKEY=nsec1... (your secret or hex)
-RELAY_ICON=/static/icon.png
-RELAY_BANNER=/static/banner.png
-```
-
-## Run
-Build and run the binary (Go toolchain required):
+### Option 1: Docker Compose (Recommended)
 
 ```bash
-go build -o bin/saint-michaels-mirror ./cmd/saint-michaels-mirror
-VERBOSE=1 ./run.sh
+# Clone the repository
+git clone https://github.com/girino/saint-michaels-mirror.git
+cd saint-michaels-mirror
+
+# Configure your relay
+cp example.env .env
+# Edit .env with your settings
+
+# Deploy with Docker Compose
+docker compose -f docker-compose.prod.yml up -d
 ```
 
-The relay listens on the address set by `ADDR`. Static assets are served from `cmd/saint-michaels-mirror/static/` and the homepage is available at `/`.
+### Option 2: Docker Run
 
-## Endpoints and UI
-- `/` — homepage describing the relay; shows NIP-11 metadata, contact and badges.
-- `/stats` — numeric counters and metrics (separate counters for query vs count operations, forwards succeeded/failed, etc.).
-- `/static/*` — static files, including favicons and logos.
+```bash
+# Run with latest image
+docker run -d \
+  --name saint-michaels-mirror \
+  -p 3337:3337 \
+  -e RELAY_NAME="Your Relay Name" \
+  -e PUBLISH_REMOTES="wss://relay1.example.com,wss://relay2.example.com" \
+  -e QUERY_REMOTES="wss://relay1.example.com,wss://relay2.example.com" \
+  ghcr.io/girino/saint-michaels-mirror:latest
+```
 
-## Forwarding and querying details
-- Publish forwarding: when a PUBLISH arrives the relay records and then (concurrently) attempts to forward the event to the remotes in `PUBLISH_REMOTES`. Forward attempts and results increment atomic counters (attempts, successes, failures) visible on `/stats`.
-- Querying: when clients send REQ, the relay uses a pool to query the configured `QUERY_REMOTES`. Responses are merged and returned to the client. Internal khatru QueryEvents are recognized (exact internal filter adding.kind=5/#e) and are not forwarded to external remotes.
-- Counting: the relay will only call CountMany on remotes that advertize NIP-45 in their NIP-11 JSON. This is determined by probing the remote root (`/`) with `Accept: application/nostr+json` at start-up (and periodically, if configured).
+### Option 3: Standalone Binary
 
-## Security and privacy notes
-- The relay respects the boundary between internal bookkeeping queries and user queries by short-circuiting internal filters.
-- Private keys (`RELAY_SECKEY`) must be kept secure. The service will use the secret key to sign NIP-11 advertised metadata if provided.
+```bash
+# Download the latest release
+wget https://github.com/girino/saint-michaels-mirror/releases/latest/download/saint-michaels-mirror-linux-amd64
+chmod +x saint-michaels-mirror-linux-amd64
 
-## Metrics
-The service exposes atomic counters for:
-- publishAttempts / publishSuccesses / publishFailures
-- queryRequests / queryInternal / queryExternal / queryEventsReturned / queryFailures
-- countRequests / countInternal / countExternal / countEventsReturned / countFailures
+# Configure and run
+export RELAY_NAME="Your Relay Name"
+export PUBLISH_REMOTES="wss://relay1.example.com,wss://relay2.example.com"
+export QUERY_REMOTES="wss://relay1.example.com,wss://relay2.example.com"
+./saint-michaels-mirror-linux-amd64 --addr=:3337
+```
 
-These counters are surfaced in `/stats` for monitoring and transparency (the "Ibeji" balance: separate counters for query vs count operations).
+## ⚙️ Configuration
 
-## Development notes
-- Favicon and image assets are generated with a small tool in `tools/icon-resize/` that produces rounded PNGs used under `cmd/saint-michaels-mirror/static/favicons/`.
-- The relay code uses a `nostr.SimplePool` for querying and a guard that probes remotes for NIP-11 capabilities before using count endpoints.
+Create a `.env` file with your configuration:
 
-## Troubleshooting
-- If queries return no results, ensure `QUERY_REMOTES` is reachable and supports the filters you send.
-- If CountMany looks disabled, the relay likely did not find NIP-45 advertised in a remote's NIP-11; check remote `/` responses.
+```bash
+# Required: Remote relays to use
+QUERY_REMOTES=wss://relay1.example.com,wss://relay2.example.com
+PUBLISH_REMOTES=wss://relay1.example.com,wss://relay2.example.com
 
-## Contributing
-- Pull requests welcome. Please follow Go project conventions. Tests for relay logic (especially the short-circuiting of internal QueryEvents and NIP-11 gating for CountMany) are highly appreciated.
+# Required: Relay identity
+RELAY_NAME="Espelho de São Miguel"
+RELAY_DESCRIPTION="The sacred mirror that stands between worlds..."
 
-## License
-This repository is released under the Girino Anarchist Licence (GAL). The full text is included in `LICENSE` and is also available at https://license.girino.org/. The `LICENSE` file year was updated to 2003-2025.
+# Optional: Contact and branding
+RELAY_CONTACT=npub1your-contact-npub-here
+RELAY_SERVICE_URL=https://your-relay.com
+RELAY_ICON=static/icon.png
+RELAY_BANNER=static/banner.png
 
-Note: the GAL is a nonstandard, humorous license with unusual conditions; treat its terms accordingly.
+# Optional: Server settings
+ADDR=:3337
+VERBOSE=0
+
+# Optional: Docker settings
+PROD_IMAGE=ghcr.io/girino/saint-michaels-mirror:latest
+COMPOSE_RELAY_PORT=3337
+```
+
+### Configuration Variables
+
+| Variable | Required | Description | Default |
+|----------|----------|-------------|---------|
+| `QUERY_REMOTES` | ✅ | Comma-separated list of relays to query | - |
+| `PUBLISH_REMOTES` | ✅ | Comma-separated list of relays to forward to | - |
+| `RELAY_NAME` | ✅ | Display name of your relay | "Espelho de São Miguel" |
+| `RELAY_DESCRIPTION` | ✅ | Description of your relay | Mythic description |
+| `RELAY_CONTACT` | ❌ | Contact npub or email | - |
+| `RELAY_SERVICE_URL` | ❌ | Public URL of your relay | - |
+| `RELAY_ICON` | ❌ | Path to relay icon | - |
+| `RELAY_BANNER` | ❌ | Path to relay banner | - |
+| `ADDR` | ❌ | Address to listen on | `:3337` |
+| `VERBOSE` | ❌ | Enable verbose logging (1/0) | `0` |
+| `PROD_IMAGE` | ❌ | Docker image for compose | `latest` |
+
+## 🌐 Web Interface
+
+Once running, visit your relay in a web browser:
+
+- **Main Page** (`/`): Relay information and NIP-11 metadata
+- **Statistics** (`/stats`): Real-time performance metrics and counters
+- **Health** (`/health`): Health status and failure tracking
+- **API** (`/api/v1/stats`, `/api/v1/health`): JSON endpoints for monitoring
+
+### Features
+
+- **Real-time Updates**: Statistics and health pages auto-refresh every 10 seconds
+- **Responsive Design**: Works on desktop and mobile devices
+- **NIP-11 Compliance**: Standard relay information endpoint
+- **Health Monitoring**: Visual indicators for relay health status
+- **Performance Metrics**: Detailed timing and counter statistics
+
+## 📊 Monitoring and Health
+
+### Health States
+
+The relay monitors its own health and reports status:
+
+- **🟢 GREEN**: No failures, all operations successful
+- **🟡 YELLOW**: Some failures detected, but below threshold
+- **🔴 RED**: Critical failures, relay marked as unhealthy
+
+### Metrics Available
+
+- **Operation Counters**: Attempts, successes, failures for all operations
+- **Timing Statistics**: Average, minimum, maximum operation times
+- **System Resources**: Memory usage, goroutine counts, GC statistics
+- **Remote Connectivity**: Status of connected remote relays
+- **Failure Tracking**: Consecutive failure counts with automatic recovery
+
+## 🏗️ Architecture
+
+### Conceptual Mapping
+
+The relay implements a spiritual metaphor through technical architecture:
+
+- **Mirror**: Published events are accepted and forwarded (mirrored) to remote relays
+- **Archangel**: Reliable, accountable message transmission and metadata signing
+- **Ibeji Twins**: Mirroring and duplication through copying and distribution
+- **Exu**: Opening of paths and active communication with other relays
+
+### Technical Implementation
+
+- **Event Forwarding**: Concurrent forwarding to multiple remote relays
+- **Query Aggregation**: Merging responses from multiple query sources
+- **Health Monitoring**: Failure tracking with configurable thresholds
+- **Metrics Collection**: Atomic counters for all operations
+- **Smart Routing**: Internal vs. external query differentiation
+
+## 🛠️ Development
+
+### Building from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/girino/saint-michaels-mirror.git
+cd saint-michaels-mirror
+
+# Build the binary
+go build -o bin/saint-michaels-mirror ./cmd/saint-michaels-mirror
+
+# Run with development settings
+./bin/saint-michaels-mirror --addr=:3337
+```
+
+### Testing
+
+```bash
+# Run tests
+go test -v ./...
+
+# Run with verbose logging
+VERBOSE=1 ./bin/saint-michaels-mirror
+```
+
+### Docker Development
+
+```bash
+# Build Docker image
+docker build -t saint-michaels-mirror:dev .
+
+# Run with development settings
+docker run -d \
+  --name saint-michaels-mirror-dev \
+  -p 3337:3337 \
+  -e VERBOSE=1 \
+  saint-michaels-mirror:dev
+```
+
+## 📦 Releases
+
+### Download Options
+
+- **Complete Archives**: Ready-to-use packages with all assets
+  - `saint-michaels-mirror-vX.X.X-complete.tar.gz` (Linux/macOS)
+  - `saint-michaels-mirror-vX.X.X-complete.zip` (Windows)
+- **Individual Binaries**: Platform-specific executable files
+- **Docker Images**: Multi-architecture images on GitHub Container Registry
+
+### Supported Platforms
+
+- **Linux**: AMD64, ARM64
+- **macOS**: AMD64, ARM64 (Apple Silicon)
+- **Windows**: AMD64, ARM64
+- **Docker**: Multi-architecture support
+
+## 🔒 Security and Privacy
+
+- **Event Integrity**: Events are forwarded without modification
+- **Internal Query Filtering**: Prevents leakage of internal bookkeeping queries
+- **Secure Key Management**: Proper handling of relay signing keys
+- **Privacy Respect**: No modification or storage of client data
+- **Security Scanning**: Automated vulnerability detection
+
+## 🤝 Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+### Development Guidelines
+
+- Follow Go project conventions
+- Add tests for new functionality
+- Update documentation as needed
+- Ensure all tests pass
+- Follow the existing code style
+
+## 📄 License
+
+This project is licensed under **Girino's Anarchist License (GAL)**.
+
+- **License Text**: [LICENSE](LICENSE)
+- **License URL**: https://license.girino.org/
+
+> Note: The GAL is a nonstandard, humorous license with unusual conditions; treat its terms accordingly.
+
+## 📞 Support
+
+- **Documentation**: [GitHub Repository](https://github.com/girino/saint-michaels-mirror)
+- **Issues**: [GitHub Issues](https://github.com/girino/saint-michaels-mirror/issues)
+- **Releases**: [GitHub Releases](https://github.com/girino/saint-michaels-mirror/releases)
+
+## 🙏 Acknowledgments
+
+- Built on the excellent [khatru](https://github.com/fiatjaf/khatru) framework
+- Inspired by the Nostr protocol and community
+- Thanks to all contributors and testers
 
 ---
-_Espelho de São Miguel — the mirror that returns light as truth._
-# relay-agregator
 
-Local repository created by assistant.
+**Espelho de São Miguel** - The mirror that returns light as truth.
+
+*Copyright (c) 2025 Girino Vey. Licensed under Girino's Anarchist License (GAL).*
