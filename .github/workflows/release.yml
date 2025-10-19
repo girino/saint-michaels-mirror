@@ -119,7 +119,15 @@ jobs:
           - `${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest`
           
           ### Binary Downloads
-          Download the appropriate binary for your platform:
+          
+          #### Complete Archives (Recommended)
+          - **Linux/macOS**: `saint-michaels-mirror-${{ github.ref_name }}-complete.tar.gz`
+          - **Windows**: `saint-michaels-mirror-${{ github.ref_name }}-complete.zip`
+          
+          These archives include binaries, static files, templates, and configuration examples.
+          
+          #### Individual Binaries
+          Download individual binaries for your platform:
           - **Linux AMD64**: `saint-michaels-mirror-linux-amd64`
           - **Linux ARM64**: `saint-michaels-mirror-linux-arm64`
           - **macOS AMD64**: `saint-michaels-mirror-darwin-amd64`
@@ -175,35 +183,49 @@ jobs:
           
           ### Option 2: Standalone Binary
           
-          #### Linux/macOS
+          #### Linux/macOS (Complete Archive - Recommended)
           ```bash
-          # Download the appropriate binary
+          # Download the complete archive with all assets
+          wget https://github.com/girino/saint-michaels-mirror/releases/download/${{ github.ref_name }}/saint-michaels-mirror-${{ github.ref_name }}-complete.tar.gz
+          tar -xzf saint-michaels-mirror-${{ github.ref_name }}-complete.tar.gz
+          cd saint-michaels-mirror-${{ github.ref_name }}
+          
+          # Copy and configure environment
+          cp .env.example .env
+          # Edit .env with your settings
+          
+          # Run the appropriate binary
+          chmod +x saint-michaels-mirror-linux-amd64  # or darwin-arm64 for macOS
+          ./saint-michaels-mirror-linux-amd64 --addr=:3337
+          ```
+          
+          #### Windows (Complete Archive - Recommended)
+          ```cmd
+          # Download the complete archive with all assets
+          curl -LO https://github.com/girino/saint-michaels-mirror/releases/download/${{ github.ref_name }}/saint-michaels-mirror-${{ github.ref_name }}-complete.zip
+          # Extract using your preferred zip tool
+          
+          # Copy and configure environment
+          copy .env.example .env
+          # Edit .env with your settings
+          
+          # Run the Windows binary
+          saint-michaels-mirror-windows-amd64.exe --addr=:3337
+          ```
+          
+          #### Individual Binary Downloads (Alternative)
+          ```bash
+          # Linux example - download individual binary
           wget https://github.com/girino/saint-michaels-mirror/releases/download/${{ github.ref_name }}/saint-michaels-mirror-linux-amd64
           chmod +x saint-michaels-mirror-linux-amd64
           
           # Set environment variables
           export RELAY_NAME="Your Relay Name"
-          export RELAY_DESCRIPTION="A Nostr relay aggregator"
           export PUBLISH_REMOTES="wss://relay1.example.com,wss://relay2.example.com"
           export QUERY_REMOTES="wss://relay1.example.com,wss://relay2.example.com"
           
           # Run the relay
           ./saint-michaels-mirror-linux-amd64 --addr=:3337
-          ```
-          
-          #### Windows
-          ```cmd
-          # Download the Windows binary
-          curl -LO https://github.com/girino/saint-michaels-mirror/releases/download/${{ github.ref_name }}/saint-michaels-mirror-windows-amd64.exe
-          
-          # Set environment variables
-          set RELAY_NAME=Your Relay Name
-          set RELAY_DESCRIPTION=A Nostr relay aggregator
-          set PUBLISH_REMOTES=wss://relay1.example.com,wss://relay2.example.com
-          set QUERY_REMOTES=wss://relay1.example.com,wss://relay2.example.com
-          
-          # Run the relay
-          saint-michaels-mirror-windows-amd64.exe --addr=:3337
           ```
           
           ## Configuration
@@ -245,21 +267,92 @@ jobs:
         draft: false
         prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
 
-    - name: Create Binary Archive
+    - name: Create Binary Archives
       run: |
         cd dist
-        tar -czf saint-michaels-mirror-${{ github.ref_name }}-binaries.tar.gz *
+        
+        # Create a complete release directory with binaries and assets
+        mkdir -p saint-michaels-mirror-${{ github.ref_name }}
+        
+        # Copy binaries and checksums
+        cp *.exe saint-michaels-mirror-${{ github.ref_name }}/ 2>/dev/null || true
+        cp saint-michaels-mirror-* saint-michaels-mirror-${{ github.ref_name }}/ 2>/dev/null || true
+        cp checksums.txt saint-michaels-mirror-${{ github.ref_name }}/ 2>/dev/null || true
+        
+        # Copy static and template folders
+        cp -r ../cmd/saint-michaels-mirror/static saint-michaels-mirror-${{ github.ref_name }}/
+        cp -r ../cmd/saint-michaels-mirror/templates saint-michaels-mirror-${{ github.ref_name }}/
+        
+        # Copy example.env as a template
+        cp ../example.env saint-michaels-mirror-${{ github.ref_name }}/.env.example
+        
+        # Create README for the release
+        cat > saint-michaels-mirror-${{ github.ref_name }}/README.md << 'EOF'
+        # Espelho de São Miguel ${{ github.ref_name }}
+        
+        This archive contains the Espelho de São Miguel Nostr relay aggregator binaries and assets.
+        
+        ## Contents
+        
+        - **Binaries**: Platform-specific executable files
+        - **static/**: Web interface assets (CSS, JavaScript, images)
+        - **templates/**: HTML templates for the web interface
+        - **.env.example**: Example configuration file
+        - **checksums.txt**: SHA256 checksums for verification
+        
+        ## Quick Start
+        
+        1. Extract this archive
+        2. Copy `.env.example` to `.env` and configure your settings
+        3. Run the appropriate binary for your platform:
+           - Linux: `./saint-michaels-mirror-linux-amd64`
+           - macOS: `./saint-michaels-mirror-darwin-amd64` or `./saint-michaels-mirror-darwin-arm64`
+           - Windows: `saint-michaels-mirror-windows-amd64.exe`
+        
+        ## Configuration
+        
+        See `.env.example` for configuration options. Key variables:
+        - `RELAY_NAME`: Display name of your relay
+        - `PUBLISH_REMOTES`: Comma-separated list of relays to forward published events to
+        - `QUERY_REMOTES`: Comma-separated list of relays to query events from
+        
+        ## Verification
+        
+        Verify the integrity of files using the provided checksums:
+        ```bash
+        sha256sum -c checksums.txt
+        ```
+        
+        ## Support
+        
+        - **Documentation**: https://github.com/girino/saint-michaels-mirror
+        - **Issues**: https://github.com/girino/saint-michaels-mirror/issues
+        - **License**: Girino's Anarchist License (GAL) - https://license.girino.org/
+        EOF
+        
+        # Create tar.gz archive (for Linux/macOS users)
+        tar -czf saint-michaels-mirror-${{ github.ref_name }}-complete.tar.gz saint-michaels-mirror-${{ github.ref_name }}/
+        
+        # Create zip archive (for Windows users)
+        zip -r saint-michaels-mirror-${{ github.ref_name }}-complete.zip saint-michaels-mirror-${{ github.ref_name }}/
+        
         ls -la
 
-    - name: Upload Release Assets
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/saint-michaels-mirror-${{ github.ref_name }}-binaries.tar.gz
-        asset_name: saint-michaels-mirror-${{ github.ref_name }}-binaries.tar.gz
-        asset_content_type: application/gzip
+    - name: Upload Complete Archives
+      run: |
+        # Upload tar.gz archive (for Linux/macOS users)
+        curl -X POST \
+          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          -H "Content-Type: application/gzip" \
+          --data-binary @./dist/saint-michaels-mirror-${{ github.ref_name }}-complete.tar.gz \
+          "${{ steps.create_release.outputs.upload_url }}?name=saint-michaels-mirror-${{ github.ref_name }}-complete.tar.gz"
+        
+        # Upload zip archive (for Windows users)
+        curl -X POST \
+          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          -H "Content-Type: application/zip" \
+          --data-binary @./dist/saint-michaels-mirror-${{ github.ref_name }}-complete.zip \
+          "${{ steps.create_release.outputs.upload_url }}?name=saint-michaels-mirror-${{ github.ref_name }}-complete.zip"
 
     - name: Upload Individual Binaries
       run: |
