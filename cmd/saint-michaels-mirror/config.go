@@ -86,7 +86,7 @@ func ApplyToRelay(r *khatru.Relay, cfg *Config) {
 		r.Info.Contact = cfg.RelayContact
 	}
 	// software and version are fixed
-	r.Info.Software = "https://github.com/girino/relay-agregator"
+	r.Info.Software = "https://github.com/girino/saint-michaels-mirror"
 	r.Info.Version = Version
 	if cfg.RelayPubKey != "" {
 		r.Info.PubKey = cfg.RelayPubKey

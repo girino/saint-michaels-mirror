@@ -100,7 +100,7 @@ func main() {
 		r.Info = &nip11.RelayInformationDocument{}
 	}
 	if r.Info.Software == "" {
-		r.Info.Software = "https://github.com/girino/relay-agregator"
+		r.Info.Software = "https://github.com/girino/saint-michaels-mirror"
 	}
 	if r.Info.Version == "" {
 		r.Info.Version = Version
