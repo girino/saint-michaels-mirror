@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/fiatjaf/eventstore/slicestore"
 	"github.com/fiatjaf/khatru"
 	"github.com/girino/relay-agregator/relaystore"
 	"github.com/nbd-wtf/go-nostr"
@@ -22,32 +21,23 @@ func main() {
 	// use LoadConfig to read env/flags
 	cfg := LoadConfig()
 
-	// choose storage: if remotes provided, use relaystore; otherwise use in-memory slicestore
-	var rStore interface{}
+	// initialize relaystore with provided remotes or default
+	var rs *relaystore.RelayStore
 	if len(cfg.PublishRemotes) > 0 || len(cfg.QueryRemotes) > 0 {
-		var rs *relaystore.RelayStore
 		if len(cfg.QueryRemotes) > 0 {
 			rs = relaystore.NewWithQueryRemotes(cfg.PublishRemotes, cfg.QueryRemotes)
 		} else {
 			rs = relaystore.New(cfg.PublishRemotes)
 		}
-		if cfg.Verbose {
-			rs.Verbose = true
-		}
-		if err := rs.Init(); err != nil {
-			log.Fatalf("initializing relaystore: %v", err)
-		}
-		rStore = rs
 	} else {
 		defaultRemote := "ws://localhost:10547"
-		rs := relaystore.New([]string{defaultRemote})
-		if cfg.Verbose {
-			rs.Verbose = true
-		}
-		if err := rs.Init(); err != nil {
-			log.Printf("warning: initializing relaystore default remote failed: %v", err)
-		}
-		rStore = rs
+		rs = relaystore.New([]string{defaultRemote})
+	}
+	if cfg.Verbose {
+		rs.Verbose = true
+	}
+	if err := rs.Init(); err != nil {
+		log.Fatalf("initializing relaystore: %v", err)
 	}
 
 	// create a basic khatru relay
@@ -154,148 +144,126 @@ func main() {
 	}
 
 	// hook store functions into relay
-	switch s := rStore.(type) {
-	case *slicestore.SliceStore:
-		r.StoreEvent = append(r.StoreEvent, s.SaveEvent)
-		r.QueryEvents = append(r.QueryEvents, s.QueryEvents)
-		r.CountEvents = append(r.CountEvents, s.CountEvents)
-		// expose health endpoint for docker healthchecks
-		mux := r.Router()
-		mux.HandleFunc("/health", func(w http.ResponseWriter, req *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			health := map[string]interface{}{
-				"status":  "healthy",
-				"service": "khatru-relay",
-				"version": Version,
-			}
-			if err := json.NewEncoder(w).Encode(health); err != nil {
-				http.Error(w, "failed to encode health status", http.StatusInternalServerError)
-				return
-			}
-		})
-	case *relaystore.RelayStore:
-		r.StoreEvent = append(r.StoreEvent, s.SaveEvent)
-		r.QueryEvents = append(r.QueryEvents, s.QueryEvents)
-		r.CountEvents = append(r.CountEvents, s.CountEvents)
-		// expose stats endpoint using the relay's router
-		mux := r.Router()
-		mux.HandleFunc("/stats", func(w http.ResponseWriter, req *http.Request) {
-			stats := s.Stats()
-			w.Header().Set("Content-Type", "application/json")
-			if err := json.NewEncoder(w).Encode(stats); err != nil {
-				http.Error(w, "failed to encode stats", http.StatusInternalServerError)
-				return
-			}
-		})
+	r.StoreEvent = append(r.StoreEvent, rs.SaveEvent)
+	r.QueryEvents = append(r.QueryEvents, rs.QueryEvents)
+	r.CountEvents = append(r.CountEvents, rs.CountEvents)
 
-		// expose health endpoint for docker healthchecks
-		mux.HandleFunc("/health", func(w http.ResponseWriter, req *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			health := map[string]interface{}{
-				"status":  "healthy",
-				"service": "khatru-relay",
-				"version": Version,
-			}
-			if err := json.NewEncoder(w).Encode(health); err != nil {
-				http.Error(w, "failed to encode health status", http.StatusInternalServerError)
-				return
-			}
-		})
+	// expose stats endpoint using the relay's router
+	mux := r.Router()
+	mux.HandleFunc("/stats", func(w http.ResponseWriter, req *http.Request) {
+		stats := rs.Stats()
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(stats); err != nil {
+			http.Error(w, "failed to encode stats", http.StatusInternalServerError)
+			return
+		}
+	})
 
-		// khatru will serve NIP-11 itself; we only expose metrics here.
-		// parse the HTML template once and serve it with r.Info as data
-		tplPath := "cmd/khatru-relay/templates/index.html"
-		tpl, err := template.ParseFiles(tplPath)
-		if err != nil {
-			log.Fatalf("failed to parse template %s: %v", tplPath, err)
+	// expose health endpoint for docker healthchecks
+	mux.HandleFunc("/health", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		health := map[string]interface{}{
+			"status":  "healthy",
+			"service": "khatru-relay",
+			"version": Version,
+		}
+		if err := json.NewEncoder(w).Encode(health); err != nil {
+			http.Error(w, "failed to encode health status", http.StatusInternalServerError)
+			return
+		}
+	})
+
+	// khatru will serve NIP-11 itself; we only expose metrics here.
+	// parse the HTML template once and serve it with r.Info as data
+	tplPath := "cmd/khatru-relay/templates/index.html"
+	tpl, err := template.ParseFiles(tplPath)
+	if err != nil {
+		log.Fatalf("failed to parse template %s: %v", tplPath, err)
+	}
+
+	mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		// build a minimal view model expected by the template
+		vm := struct {
+			Name           string
+			Description    string
+			PubKey         string
+			PubKeyNPub     string
+			Contact        string
+			ContactHref    string
+			ContactIsLink  bool
+			SoftwareHref   string
+			SoftwareIsLink bool
+			SupportedNIPs  []any
+			Software       string
+			Version        string
+			Icon           string
+			Banner         string
+			ServiceURL     string
+		}{
+			Name:           r.Info.Name,
+			Description:    r.Info.Description,
+			PubKey:         r.Info.PubKey,
+			PubKeyNPub:     "",
+			Contact:        r.Info.Contact,
+			ContactHref:    "",
+			ContactIsLink:  false,
+			SoftwareHref:   "",
+			SoftwareIsLink: false,
+			SupportedNIPs:  r.Info.SupportedNIPs,
+			Software:       r.Info.Software,
+			Version:        r.Info.Version,
+			Icon:           r.Info.Icon,
+			Banner:         r.Info.Banner,
+			ServiceURL:     r.ServiceURL,
 		}
 
-		mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			// build a minimal view model expected by the template
-			vm := struct {
-				Name           string
-				Description    string
-				PubKey         string
-				PubKeyNPub     string
-				Contact        string
-				ContactHref    string
-				ContactIsLink  bool
-				SoftwareHref   string
-				SoftwareIsLink bool
-				SupportedNIPs  []any
-				Software       string
-				Version        string
-				Icon           string
-				Banner         string
-				ServiceURL     string
-			}{
-				Name:           r.Info.Name,
-				Description:    r.Info.Description,
-				PubKey:         r.Info.PubKey,
-				PubKeyNPub:     "",
-				Contact:        r.Info.Contact,
-				ContactHref:    "",
-				ContactIsLink:  false,
-				SoftwareHref:   "",
-				SoftwareIsLink: false,
-				SupportedNIPs:  r.Info.SupportedNIPs,
-				Software:       r.Info.Software,
-				Version:        r.Info.Version,
-				Icon:           r.Info.Icon,
-				Banner:         r.Info.Banner,
-				ServiceURL:     r.ServiceURL,
+		// compute contact link if it's an email or nostr nip19 pub/profile
+		if vm.Contact == "" && vm.PubKey != "" {
+			// expose pubkey as npub contact when none provided
+			if npub, err := nip19.EncodePublicKey(vm.PubKey); err == nil && npub != "" {
+				vm.Contact = npub
 			}
+		}
 
-			// compute contact link if it's an email or nostr nip19 pub/profile
-			if vm.Contact == "" && vm.PubKey != "" {
-				// expose pubkey as npub contact when none provided
-				if npub, err := nip19.EncodePublicKey(vm.PubKey); err == nil && npub != "" {
-					vm.Contact = npub
-				}
+		// compute npub for explicit display
+		if vm.PubKey != "" {
+			if npub, err := nip19.EncodePublicKey(vm.PubKey); err == nil && npub != "" {
+				vm.PubKeyNPub = npub
 			}
+		}
 
-			// compute npub for explicit display
-			if vm.PubKey != "" {
-				if npub, err := nip19.EncodePublicKey(vm.PubKey); err == nil && npub != "" {
-					vm.PubKeyNPub = npub
-				}
+		if vm.Contact != "" {
+			c := strings.TrimSpace(vm.Contact)
+			// npub / nprofile
+			if strings.HasPrefix(c, "npub") || strings.HasPrefix(c, "nprofile") {
+				vm.ContactHref = "https://njump.me/" + c
+				vm.ContactIsLink = true
+			} else if strings.Contains(c, "@") && !strings.Contains(c, " ") {
+				// treat as email
+				vm.ContactHref = "mailto:" + c
+				vm.ContactIsLink = true
 			}
+		}
 
-			if vm.Contact != "" {
-				c := strings.TrimSpace(vm.Contact)
-				// npub / nprofile
-				if strings.HasPrefix(c, "npub") || strings.HasPrefix(c, "nprofile") {
-					vm.ContactHref = "https://njump.me/" + c
-					vm.ContactIsLink = true
-				} else if strings.Contains(c, "@") && !strings.Contains(c, " ") {
-					// treat as email
-					vm.ContactHref = "mailto:" + c
-					vm.ContactIsLink = true
-				}
+		// software link detection (http/https)
+		if vm.Software != "" {
+			s := strings.TrimSpace(vm.Software)
+			if strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://") {
+				vm.SoftwareHref = s
+				vm.SoftwareIsLink = true
 			}
+		}
 
-			// software link detection (http/https)
-			if vm.Software != "" {
-				s := strings.TrimSpace(vm.Software)
-				if strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://") {
-					vm.SoftwareHref = s
-					vm.SoftwareIsLink = true
-				}
-			}
+		if err := tpl.Execute(w, vm); err != nil {
+			http.Error(w, "template render error", http.StatusInternalServerError)
+			log.Printf("template execute error: %v", err)
+		}
+	})
 
-			if err := tpl.Execute(w, vm); err != nil {
-				http.Error(w, "template render error", http.StatusInternalServerError)
-				log.Printf("template execute error: %v", err)
-			}
-		})
-
-		// serve static assets (icon/banner) from ./cmd/khatru-relay/static
-		fs := http.FileServer(http.Dir("cmd/khatru-relay/static"))
-		mux.Handle("/static/", http.StripPrefix("/static/", fs))
-	default:
-		log.Fatalf("unsupported store type: %T", s)
-	}
+	// serve static assets (icon/banner) from ./cmd/khatru-relay/static
+	fs := http.FileServer(http.Dir("cmd/khatru-relay/static"))
+	mux.Handle("/static/", http.StripPrefix("/static/", fs))
 
 	// parse addr into host and port
 	host, portStr, err := net.SplitHostPort(cfg.Addr)
