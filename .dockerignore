@@ -1,0 +1,21 @@
+# Binaries
+/out
+
+# Vendor and build artifacts
+bin/
+
+# VCS
+.git
+
+# Editor
+.vscode
+.idea
+
+# Node
+node_modules
+
+# OS
+.DS_Store
+
+# Release artifacts
+release
