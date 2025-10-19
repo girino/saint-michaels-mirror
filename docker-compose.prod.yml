@@ -35,7 +35,7 @@ services:
     volumes:
       - tor_data:/var/lib/tor
     # map a hidden service port 80 to relay:3337; adjust flags for your tor image if different
-    command: -s 80:relay:3337 -P 9050
+    command: ["-s", "80:relay:3337", "-P", "9050"]
     networks:
       - proxy_net
     healthcheck:
