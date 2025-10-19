@@ -39,13 +39,25 @@ jobs:
     - name: Build application
       run: go build -o bin/saint-michaels-mirror ./cmd/saint-michaels-mirror
 
-    - name: Test Docker build
-      run: docker build -t saint-michaels-mirror:test .
-
-    - name: Test Docker run
+    - name: Test Docker build (multi-architecture)
       run: |
-        docker run -d --name test-relay -p 3338:3337 saint-michaels-mirror:test
+        # Test AMD64 build
+        docker build --build-arg GOARCH=amd64 -t saint-michaels-mirror:test-amd64 .
+        # Test ARM64 build
+        docker build --build-arg GOARCH=arm64 -t saint-michaels-mirror:test-arm64 .
+
+    - name: Test Docker run (AMD64)
+      run: |
+        docker run -d --name test-relay-amd64 -p 3338:3337 saint-michaels-mirror:test-amd64
         sleep 5
         curl -f http://localhost:3338/.well-known/nostr.json || exit 1
-        docker stop test-relay
-        docker rm test-relay
+        docker stop test-relay-amd64
+        docker rm test-relay-amd64
+
+    - name: Test Docker run (ARM64)
+      run: |
+        docker run -d --name test-relay-arm64 -p 3339:3337 saint-michaels-mirror:test-arm64
+        sleep 5
+        curl -f http://localhost:3339/.well-known/nostr.json || exit 1
+        docker stop test-relay-arm64
+        docker rm test-relay-arm64

@@ -17,19 +17,20 @@ This directory contains GitHub Actions workflows for automated CI/CD, testing, a
 
 ### 2. Test (`test.yml`)
 - **Trigger**: Push to `main`, Pull Requests to `main`
-- **Purpose**: Comprehensive testing including Docker
+- **Purpose**: Comprehensive testing including Docker (build only, no push)
 - **Actions**:
   - Go build and test
-  - Docker image build test
-  - Docker container run test
+  - Multi-architecture Docker image build test (AMD64, ARM64)
+  - Docker container run test for both architectures
   - Health check validation
 
 ### 3. Docker (`docker.yml`)
-- **Trigger**: Push to `main`, Tags `v*`, Pull Requests to `main`
-- **Purpose**: Build and push Docker images
+- **Trigger**: Push to `main`, Tags `v*`
+- **Purpose**: Build and push Docker images (only pushes on tags)
 - **Actions**:
   - Build multi-architecture images (amd64, arm64)
-  - Push to GitHub Container Registry (ghcr.io)
+  - Push to GitHub Container Registry (ghcr.io) only on tagged commits
+  - Build (but don't push) on main branch commits for testing
   - Cache layers for faster builds
   - Tag images with semantic versioning
 
