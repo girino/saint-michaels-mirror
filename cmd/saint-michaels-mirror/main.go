@@ -45,7 +45,7 @@ func main() {
 		log.Fatalf("initializing relaystore: %v", err)
 	}
 
-	// create a basic khatru relay
+	// create a basic khatru relay instance
 	r := khatru.NewRelay()
 
 	// apply NIP-11 fields from config
@@ -352,7 +352,7 @@ func main() {
 		log.Fatalf("invalid port: %v", err)
 	}
 
-	log.Printf("Starting khatru relay on %s", cfg.Addr)
+	log.Printf("Starting saint-michaels-mirror on %s", cfg.Addr)
 	if err := r.Start(host, port); err != nil {
 		log.Fatalf("relay exited: %v", err)
 	}

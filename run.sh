@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# run.sh - build and run the khatru relay for testing
+# run.sh - build and run the saint-michaels-mirror for testing
 # This script no longer accepts command-line flags or environment overrides
 # directly. Instead it reads configuration from .env files. It will source
 # the following files (if present) in this order, allowing overrides:
