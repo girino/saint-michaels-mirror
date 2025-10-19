@@ -13,17 +13,26 @@
 </head>
 <body>
   <div class="wrap">
+    {{if .Banner}}
+      <div style="width:100%;height:160px;margin:-28px -28px 18px;border-top-left-radius:12px;border-top-right-radius:12px;overflow:hidden;box-shadow:inset 0 -30px 60px rgba(0,0,0,0.4)">
+        <img src="{{.Banner}}" alt="banner" style="width:100%;height:100%;object-fit:cover;display:block"/>
+      </div>
+    {{end}}
     <a href="/" class="back-link">← Back to Relay Info</a>
     <header>
       <div class="logo">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect width="24" height="24" rx="4" fill="var(--accent)"/>
-          <path d="M6 12h12M6 8h12M6 16h8" stroke="#000" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
+        {{if .Icon}}
+          <img src="{{.Icon}}" alt="icon" style="width:100%;height:100%;object-fit:cover"/>
+        {{else}}
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="24" height="24" rx="4" fill="var(--accent)"/>
+            <path d="M6 12h12M6 8h12M6 16h8" stroke="#000" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        {{end}}
       </div>
       <div style="flex:1">
-        <h1>Health Status</h1>
-        <p class="lead">System health monitoring for Espelho de São Miguel</p>
+        <h1>{{.Name}} — Health Status</h1>
+        <p class="lead">{{.Description}}</p>
       </div>
     </header>
 
