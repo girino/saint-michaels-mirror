@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Copyright (c) 2025 Girino Vey.
+# 
+# This software is licensed under the Girino License.
+# See LICENSE file for full license text.
+#
+# Build and run script for Espelho de São Miguel.
+
 # run.sh - build and run the Espelho de São Miguel for testing
 # This script no longer accepts command-line flags or environment overrides
 # directly. Instead it reads configuration from .env files. It will source

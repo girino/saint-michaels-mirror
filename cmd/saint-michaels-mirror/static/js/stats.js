@@ -1,3 +1,12 @@
+/*
+Copyright (c) 2025 Girino Vey.
+
+This software is licensed under the Girino License.
+See LICENSE file for full license text.
+
+Statistics loader for Espelho de São Miguel web interface.
+*/
+
 // Stats loader
 document.getElementById('stats-details').addEventListener('toggle', async function(e){
   if(!this.open) return;

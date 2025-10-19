@@ -1,3 +1,12 @@
+/*
+Copyright (c) 2025 Girino Vey.
+
+This software is licensed under the Girino License.
+See LICENSE file for full license text.
+
+Health status page functionality for Espelho de São Miguel web interface.
+*/
+
 // Health page JavaScript
 let refreshInterval;
 

@@ -1,3 +1,12 @@
+/*
+Copyright (c) 2025 Girino Vey.
+
+This software is licensed under the Girino License.
+See LICENSE file for full license text.
+
+NIP-11 JSON loader for Espelho de São Miguel web interface.
+*/
+
 // NIP-11 JSON loader
 document.getElementById('nip11-details').addEventListener('toggle', async function(e){
   if(!this.open) return;

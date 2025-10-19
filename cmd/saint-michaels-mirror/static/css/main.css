@@ -1,3 +1,12 @@
+/*
+Copyright (c) 2025 Girino Vey.
+
+This software is licensed under the Girino License.
+See LICENSE file for full license text.
+
+Main CSS styles for Espelho de São Miguel web interface.
+*/
+
 /* Nostr-inspired palette */
 :root{
   --bg:#0b0b0b; /* deep near-black */

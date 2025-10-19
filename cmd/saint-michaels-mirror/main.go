@@ -1,3 +1,9 @@
+// Copyright (c) 2025 Girino Vey.
+//
+// This software is licensed under the Girino License.
+// See LICENSE file for full license text.
+//
+// Espelho de São Miguel - A Nostr relay aggregator built on khatru.
 package main
 
 import (

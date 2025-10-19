@@ -1,3 +1,10 @@
+# Copyright (c) 2025 Girino Vey.
+# 
+# This software is licensed under the Girino License.
+# See LICENSE file for full license text.
+#
+# Multi-stage Dockerfile for Espelho de São Miguel
+
 # Multi-stage Dockerfile for Espelho de São Miguel
 # Build stage
 FROM golang:1.24.1-bullseye AS builder

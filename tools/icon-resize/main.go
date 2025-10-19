@@ -1,3 +1,9 @@
+// Copyright (c) 2025 Girino Vey.
+//
+// This software is licensed under the Girino License.
+// See LICENSE file for full license text.
+//
+// Icon resize utility for Espelho de São Miguel.
 package main
 
 import (
