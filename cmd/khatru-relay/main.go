@@ -234,7 +234,7 @@ func main() {
 				c := strings.TrimSpace(vm.Contact)
 				// npub / nprofile
 				if strings.HasPrefix(c, "npub") || strings.HasPrefix(c, "nprofile") {
-					vm.ContactHref = "nostr:" + c
+					vm.ContactHref = "https://njump.me/" + c
 					vm.ContactIsLink = true
 				} else if strings.Contains(c, "@") && !strings.Contains(c, " ") {
 					// treat as email
