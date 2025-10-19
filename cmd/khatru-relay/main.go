@@ -108,7 +108,7 @@ func main() {
 		r.Info.Software = "https://github.com/girino/relay-agregator"
 	}
 	if r.Info.Version == "" {
-		r.Info.Version = "0.1.0"
+		r.Info.Version = Version
 	}
 	// ensure SupportedNIPs contains 11 and 45 (we add 45 in case a store/feature needs it)
 	ensureSupportedNips(r, []int{11, 45})
