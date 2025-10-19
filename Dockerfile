@@ -36,6 +36,4 @@ COPY --from=builder /src/cmd/khatru-relay/templates ./cmd/khatru-relay/templates
 RUN chown -R relayuser:relayuser ./khatru-relay ./cmd
 USER relayuser
 
-EXPOSE 8080
-
 ENTRYPOINT ["./khatru-relay"]
