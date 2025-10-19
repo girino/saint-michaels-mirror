@@ -387,14 +387,6 @@ func (r *RelayStore) ensureRelay(ctx context.Context, url string) (*nostr.Relay,
 
 // QueryEvents returns an empty, closed channel because this store does not persist events.
 func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan *nostr.Event, error) {
-	// Start timing measurement
-	startTime := time.Now()
-	defer func() {
-		duration := time.Since(startTime)
-		atomic.AddInt64(&r.totalQueryDurationNs, duration.Nanoseconds())
-		atomic.AddInt64(&r.queryCount, 1)
-	}()
-
 	// count total requests
 	atomic.AddInt64(&r.queryRequests, 1)
 
@@ -478,6 +470,14 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 	out := make(chan *nostr.Event)
 
 	go func() {
+		// Start timing measurement for actual query processing
+		startTime := time.Now()
+		defer func() {
+			duration := time.Since(startTime)
+			atomic.AddInt64(&r.totalQueryDurationNs, duration.Nanoseconds())
+			atomic.AddInt64(&r.queryCount, 1)
+		}()
+
 		defer close(out)
 		for ie := range evch {
 			// ie is a nostr.RelayEvent containing the Event pointer
