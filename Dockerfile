@@ -24,8 +24,16 @@ RUN apt-get update \
 # Create non-root user
 RUN useradd -m -u 1000 relayuser
 WORKDIR /home/relayuser
+
+# Copy the binary
 COPY --from=builder /out/khatru-relay ./khatru-relay
-RUN chown relayuser:relayuser ./khatru-relay
+
+# Copy static files and templates
+COPY --from=builder /src/cmd/khatru-relay/static ./cmd/khatru-relay/static
+COPY --from=builder /src/cmd/khatru-relay/templates ./cmd/khatru-relay/templates
+
+# Set proper ownership
+RUN chown -R relayuser:relayuser ./khatru-relay ./cmd
 USER relayuser
 
 EXPOSE 8080
