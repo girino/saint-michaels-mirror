@@ -227,7 +227,7 @@ func main() {
 
 		health := map[string]interface{}{
 			"status":                       status,
-			"service":                      "Espelho de São Miguel",
+			"service":                      r.Info.Name,
 			"version":                      Version,
 			"main_health_state":            relayStats.MainHealthState,
 			"publish_health_state":         relayStats.PublishHealthState,
