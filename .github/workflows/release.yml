@@ -111,6 +111,10 @@ jobs:
           UPLOAD_URL="${{ steps.create_release.outputs.upload_url }}"
           UPLOAD_URL="${UPLOAD_URL%%\{*}"
           cd release
+          # Generate a full chronological commit history into the release directory
+          echo "Generating full commit history file"
+          git --no-pager log --reverse --pretty=format:'commit %H%nAuthor: %an <%ae>%nDate: %ad%n%n%s%n%n%b%n---' --date=short > COMMIT_HISTORY.md
+          echo "Wrote release/COMMIT_HISTORY.md (size: $(wc -c < COMMIT_HISTORY.md) bytes)"
           for f in *; do
             [ -f "$f" ] || continue
             echo "Uploading $f"
