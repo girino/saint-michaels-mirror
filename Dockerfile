@@ -12,8 +12,8 @@ FROM golang:1.24.1-bullseye AS builder
 WORKDIR /src
 
 # Accept build arguments for target architecture
-ARG GOOS=linux
-ARG GOARCH=amd64
+ARG GOOS
+ARG GOARCH
 
 # Copy modules manifests first for better caching
 COPY go.mod go.sum ./
