@@ -42,118 +42,126 @@
       <div id="error-message"></div>
     </div>
 
-    <div id="stats-content" class="foldables" style="display: none;">
-      <div class="card">
-        <div class="k">Application</div>
-        <div class="stat-item">
-          <span class="stat-label">Version</span>
-          <span class="stat-value" id="app-version">-</span>
+    <div id="stats-content" style="display: none;">
+      <div class="meta">
+        <div class="card">
+          <div class="k">Application</div>
+          <div class="stat-item">
+            <span class="stat-label">Version</span>
+            <span class="stat-value" id="app-version">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Uptime</span>
+            <span class="stat-value" id="app-uptime">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Goroutines</span>
+            <span class="stat-value" id="app-goroutines">-</span>
+          </div>
         </div>
-        <div class="stat-item">
-          <span class="stat-label">Uptime</span>
-          <span class="stat-value" id="app-uptime">-</span>
+        <div class="card">
+          <div class="k">Memory & GC</div>
+          <div class="stat-item">
+            <span class="stat-label">Memory Used</span>
+            <span class="stat-value" id="app-memory-used">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Memory Total</span>
+            <span class="stat-value" id="app-memory-total">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">GC Cycles</span>
+            <span class="stat-value" id="app-gc-cycles">-</span>
+          </div>
         </div>
-        <div class="stat-item">
-          <span class="stat-label">Goroutines</span>
-          <span class="stat-value" id="app-goroutines">-</span>
+        <div class="card">
+          <div class="k">Relay Operations</div>
+          <div class="stat-item">
+            <span class="stat-label">Publish Attempts</span>
+            <span class="stat-value" id="relay-publish-attempts">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Publish Successes</span>
+            <span class="stat-value" id="relay-publish-successes">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Publish Failures</span>
+            <span class="stat-value" id="relay-publish-failures">-</span>
+          </div>
         </div>
-        <div class="stat-item">
-          <span class="stat-label">Memory Used</span>
-          <span class="stat-value" id="app-memory-used">-</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">Memory Total</span>
-          <span class="stat-value" id="app-memory-total">-</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">GC Cycles</span>
-          <span class="stat-value" id="app-gc-cycles">-</span>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="k">Relay Operations</div>
-        <div class="stat-item">
-          <span class="stat-label">Publish Attempts</span>
-          <span class="stat-value" id="relay-publish-attempts">-</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">Publish Successes</span>
-          <span class="stat-value" id="relay-publish-successes">-</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">Publish Failures</span>
-          <span class="stat-value" id="relay-publish-failures">-</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">Query Requests</span>
-          <span class="stat-value" id="relay-query-requests">-</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">Query Events Returned</span>
-          <span class="stat-value" id="relay-query-events">-</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">Count Requests</span>
-          <span class="stat-value" id="relay-count-requests">-</span>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="k">Health Status</div>
-        <div class="stat-item">
-          <span class="stat-label">Overall Health</span>
-          <span class="stat-value">
-            <span class="health-indicator" id="health-overall">-</span>
-          </span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">Publish Health</span>
-          <span class="stat-value">
-            <span class="health-indicator" id="health-publish">-</span>
-          </span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">Query Health</span>
-          <span class="stat-value">
-            <span class="health-indicator" id="health-query">-</span>
-          </span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">Consecutive Publish Failures</span>
-          <span class="stat-value" id="health-publish-failures">-</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">Consecutive Query Failures</span>
-          <span class="stat-value" id="health-query-failures">-</span>
+        <div class="card">
+          <div class="k">Query Operations</div>
+          <div class="stat-item">
+            <span class="stat-label">Query Requests</span>
+            <span class="stat-value" id="relay-query-requests">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Query Events Returned</span>
+            <span class="stat-value" id="relay-query-events">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Count Requests</span>
+            <span class="stat-value" id="relay-count-requests">-</span>
+          </div>
         </div>
       </div>
 
-      <div class="card">
-        <div class="k">Performance</div>
-        <div class="stat-item">
-          <span class="stat-label">Avg Publish Duration</span>
-          <span class="stat-value" id="perf-publish-avg">-</span>
+      <div class="foldables">
+        <div class="card">
+          <div class="k">Health Status</div>
+          <div class="stat-item">
+            <span class="stat-label">Overall Health</span>
+            <span class="stat-value">
+              <span class="health-indicator" id="health-overall">-</span>
+            </span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Publish Health</span>
+            <span class="stat-value">
+              <span class="health-indicator" id="health-publish">-</span>
+            </span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Query Health</span>
+            <span class="stat-value">
+              <span class="health-indicator" id="health-query">-</span>
+            </span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Consecutive Publish Failures</span>
+            <span class="stat-value" id="health-publish-failures">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Consecutive Query Failures</span>
+            <span class="stat-value" id="health-query-failures">-</span>
+          </div>
         </div>
-        <div class="stat-item">
-          <span class="stat-label">Avg Query Duration</span>
-          <span class="stat-value" id="perf-query-avg">-</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">Avg Count Duration</span>
-          <span class="stat-value" id="perf-count-avg">-</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">Total Publish Time</span>
-          <span class="stat-value" id="perf-publish-total">-</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">Total Query Time</span>
-          <span class="stat-value" id="perf-query-total">-</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">Total Count Time</span>
-          <span class="stat-value" id="perf-count-total">-</span>
+        <div class="card">
+          <div class="k">Performance</div>
+          <div class="stat-item">
+            <span class="stat-label">Avg Publish Duration</span>
+            <span class="stat-value" id="perf-publish-avg">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Avg Query Duration</span>
+            <span class="stat-value" id="perf-query-avg">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Avg Count Duration</span>
+            <span class="stat-value" id="perf-count-avg">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Total Publish Time</span>
+            <span class="stat-value" id="perf-publish-total">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Total Query Time</span>
+            <span class="stat-value" id="perf-query-total">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Total Count Time</span>
+            <span class="stat-value" id="perf-count-total">-</span>
+          </div>
         </div>
       </div>
     </div>

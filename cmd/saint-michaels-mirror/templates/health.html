@@ -51,82 +51,81 @@
       <p>Espelho de São Miguel v1.0.0</p>
     </div>
 
-    <div id="health-content" class="foldables" style="display: none;">
-      <div class="card">
-        <div class="k">Service Information</div>
-        <div class="health-item">
-          <span class="health-label">Service Name</span>
-          <span class="health-value" id="service-name">-</span>
+    <div id="health-content" style="display: none;">
+      <div class="meta">
+        <div class="card">
+          <div class="k">Service Information</div>
+          <div class="health-item">
+            <span class="health-label">Service Name</span>
+            <span class="health-value" id="service-name">-</span>
+          </div>
+          <div class="health-item">
+            <span class="health-label">Version</span>
+            <span class="health-value" id="service-version">-</span>
+          </div>
+          <div class="health-item">
+            <span class="health-label">Overall Status</span>
+            <span class="health-value">
+              <span class="health-indicator" id="service-status">-</span>
+            </span>
+          </div>
         </div>
-        <div class="health-item">
-          <span class="health-label">Version</span>
-          <span class="health-value" id="service-version">-</span>
+        <div class="card">
+          <div class="k">Health Indicators</div>
+          <div class="health-item">
+            <span class="health-label">Main Health State</span>
+            <span class="health-value">
+              <span class="health-indicator" id="main-health">-</span>
+            </span>
+          </div>
+          <div class="health-item">
+            <span class="health-label">Publish Health</span>
+            <span class="health-value">
+              <span class="health-indicator" id="publish-health">-</span>
+            </span>
+          </div>
+          <div class="health-item">
+            <span class="health-label">Query Health</span>
+            <span class="health-value">
+              <span class="health-indicator" id="query-health">-</span>
+            </span>
+          </div>
         </div>
-        <div class="health-item">
-          <span class="health-label">Overall Status</span>
-          <span class="health-value">
-            <span class="health-indicator" id="service-status">-</span>
-          </span>
+        <div class="card">
+          <div class="k">Failure Tracking</div>
+          <div class="health-item">
+            <span class="health-label">Consecutive Publish Failures</span>
+            <span class="health-value" id="publish-failures">-</span>
+          </div>
+          <div class="health-item">
+            <span class="health-label">Consecutive Query Failures</span>
+            <span class="health-value" id="query-failures">-</span>
+          </div>
+          <div class="health-item">
+            <span class="health-label">Failure Threshold</span>
+            <span class="health-value">10 failures</span>
+          </div>
         </div>
-      </div>
-
-      <div class="card">
-        <div class="k">Health Indicators</div>
-        <div class="health-item">
-          <span class="health-label">Main Health State</span>
-          <span class="health-value">
-            <span class="health-indicator" id="main-health">-</span>
-          </span>
-        </div>
-        <div class="health-item">
-          <span class="health-label">Publish Health</span>
-          <span class="health-value">
-            <span class="health-indicator" id="publish-health">-</span>
-          </span>
-        </div>
-        <div class="health-item">
-          <span class="health-label">Query Health</span>
-          <span class="health-value">
-            <span class="health-indicator" id="query-health">-</span>
-          </span>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="k">Failure Tracking</div>
-        <div class="health-item">
-          <span class="health-label">Consecutive Publish Failures</span>
-          <span class="health-value" id="publish-failures">-</span>
-        </div>
-        <div class="health-item">
-          <span class="health-label">Consecutive Query Failures</span>
-          <span class="health-value" id="query-failures">-</span>
-        </div>
-        <div class="health-item">
-          <span class="health-label">Failure Threshold</span>
-          <span class="health-value">10 failures</span>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="k">Health Legend</div>
-        <div class="health-item">
-          <span class="health-label">
-            <span class="health-indicator health-green">GREEN</span>
-          </span>
-          <span class="health-value">No failures</span>
-        </div>
-        <div class="health-item">
-          <span class="health-label">
-            <span class="health-indicator health-yellow">YELLOW</span>
-          </span>
-          <span class="health-value">1-9 failures</span>
-        </div>
-        <div class="health-item">
-          <span class="health-label">
-            <span class="health-indicator health-red">RED</span>
-          </span>
-          <span class="health-value">10+ failures</span>
+        <div class="card">
+          <div class="k">Health Legend</div>
+          <div class="health-item">
+            <span class="health-label">
+              <span class="health-indicator health-green">GREEN</span>
+            </span>
+            <span class="health-value">No failures</span>
+          </div>
+          <div class="health-item">
+            <span class="health-label">
+              <span class="health-indicator health-yellow">YELLOW</span>
+            </span>
+            <span class="health-value">1-9 failures</span>
+          </div>
+          <div class="health-item">
+            <span class="health-label">
+              <span class="health-indicator health-red">RED</span>
+            </span>
+            <span class="health-value">10+ failures</span>
+          </div>
         </div>
       </div>
     </div>
