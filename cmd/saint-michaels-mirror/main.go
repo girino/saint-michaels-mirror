@@ -227,7 +227,7 @@ func main() {
 
 		health := map[string]interface{}{
 			"status":                       status,
-			"service":                      "khatru-relay",
+			"service":                      "saint-michaels-mirror",
 			"version":                      Version,
 			"main_health_state":            relayStats.MainHealthState,
 			"publish_health_state":         relayStats.PublishHealthState,
@@ -245,7 +245,7 @@ func main() {
 
 	// khatru will serve NIP-11 itself; we only expose metrics here.
 	// parse the HTML template once and serve it with r.Info as data
-	tplPath := "cmd/khatru-relay/templates/index.html"
+	tplPath := "cmd/saint-michaels-mirror/templates/index.html"
 	tpl, err := template.ParseFiles(tplPath)
 	if err != nil {
 		log.Fatalf("failed to parse template %s: %v", tplPath, err)
@@ -331,8 +331,8 @@ func main() {
 		}
 	})
 
-	// serve static assets (icon/banner) from ./cmd/khatru-relay/static
-	fs := http.FileServer(http.Dir("cmd/khatru-relay/static"))
+	// serve static assets (icon/banner) from ./cmd/saint-michaels-mirror/static
+	fs := http.FileServer(http.Dir("cmd/saint-michaels-mirror/static"))
 	mux.Handle("/static/", http.StripPrefix("/static/", fs))
 
 	// parse addr into host and port

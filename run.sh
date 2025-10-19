@@ -20,7 +20,7 @@ set -a
 set +a
 
 echo "Building..."
-go build -o bin/khatru-relay ./cmd/khatru-relay
+go build -o bin/saint-michaels-mirror ./cmd/saint-michaels-mirror
 
 echo "Starting khatru relay (configuration comes from .env files)"
-exec ./bin/khatru-relay
+exec ./bin/saint-michaels-mirror

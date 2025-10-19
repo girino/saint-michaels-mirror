@@ -105,7 +105,7 @@ func applyRoundedMask(img image.Image, radius float64) image.Image {
 }
 
 func main() {
-	in := "cmd/khatru-relay/static/icon.png"
+	in := "cmd/saint-michaels-mirror/static/icon.png"
 	f, err := os.Open(in)
 	if err != nil {
 		log.Fatalf("open icon: %v", err)
@@ -117,7 +117,7 @@ func main() {
 	}
 
 	sizes := []int{16, 32, 48, 64, 96, 128, 180}
-	outdir := "cmd/khatru-relay/static/favicons"
+	outdir := "cmd/saint-michaels-mirror/static/favicons"
 	if err := os.MkdirAll(outdir, 0755); err != nil {
 		log.Fatalf("mkdir: %v", err)
 	}

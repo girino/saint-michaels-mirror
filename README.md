@@ -51,11 +51,11 @@ RELAY_BANNER=/static/banner.png
 Build and run the binary (Go toolchain required):
 
 ```bash
-go build -o bin/khatru-relay ./cmd/khatru-relay
+go build -o bin/saint-michaels-mirror ./cmd/saint-michaels-mirror
 VERBOSE=1 ./run.sh
 ```
 
-The relay listens on the address set by `ADDR`. Static assets are served from `cmd/khatru-relay/static/` and the homepage is available at `/`.
+The relay listens on the address set by `ADDR`. Static assets are served from `cmd/saint-michaels-mirror/static/` and the homepage is available at `/`.
 
 ## Endpoints and UI
 - `/` — homepage describing the relay; shows NIP-11 metadata, contact and badges.
@@ -80,7 +80,7 @@ The service exposes atomic counters for:
 These counters are surfaced in `/stats` for monitoring and transparency (the "Ibeji" balance: separate counters for query vs count operations).
 
 ## Development notes
-- Favicon and image assets are generated with a small tool in `tools/icon-resize/` that produces rounded PNGs used under `cmd/khatru-relay/static/favicons/`.
+- Favicon and image assets are generated with a small tool in `tools/icon-resize/` that produces rounded PNGs used under `cmd/saint-michaels-mirror/static/favicons/`.
 - The relay code uses a `nostr.SimplePool` for querying and a guard that probes remotes for NIP-11 capabilities before using count endpoints.
 
 ## Troubleshooting

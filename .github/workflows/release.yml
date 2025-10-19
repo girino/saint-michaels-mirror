@@ -22,23 +22,23 @@ jobs:
         run: mkdir -p release
       - name: Build Linux amd64
         run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-X main.Version=${{ github.ref_name }}" -o release/khatru-relay-linux-amd64 ./cmd/khatru-relay
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-X main.Version=${{ github.ref_name }}" -o release/saint-michaels-mirror-linux-amd64 ./cmd/saint-michaels-mirror
       - name: Build Linux arm64
         run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "-X main.Version=${{ github.ref_name }}" -o release/khatru-relay-linux-arm64 ./cmd/khatru-relay
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "-X main.Version=${{ github.ref_name }}" -o release/saint-michaels-mirror-linux-arm64 ./cmd/saint-michaels-mirror
       - name: Build macOS amd64
         run: |
-          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.Version=${{ github.ref_name }}" -o release/khatru-relay-darwin-amd64 ./cmd/khatru-relay
+          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.Version=${{ github.ref_name }}" -o release/saint-michaels-mirror-darwin-amd64 ./cmd/saint-michaels-mirror
       - name: Build macOS arm64
         run: |
-          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.Version=${{ github.ref_name }}" -o release/khatru-relay-darwin-arm64 ./cmd/khatru-relay
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.Version=${{ github.ref_name }}" -o release/saint-michaels-mirror-darwin-arm64 ./cmd/saint-michaels-mirror
       - name: Build Windows amd64
         run: |
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "-X main.Version=${{ github.ref_name }}" -o release/khatru-relay-windows-amd64.exe ./cmd/khatru-relay
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "-X main.Version=${{ github.ref_name }}" -o release/saint-michaels-mirror-windows-amd64.exe ./cmd/saint-michaels-mirror
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: khatru-relay-${{ github.ref_name }}
+          name: saint-michaels-mirror-${{ github.ref_name }}
           path: release/
       - name: Get or create GitHub Release
         id: create_release
