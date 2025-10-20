@@ -21,7 +21,7 @@ These archives include:
 - **Verification**: `checksums.txt` for file integrity verification
 
 ### Changes
-{{CHANGELOG}}
+See the curated CHANGELOG.md in this release for human-friendly summaries of changes across versions.
 
 ## Quick Start
 
@@ -116,7 +116,7 @@ saint-michaels-mirror-windows-amd64.exe --addr=:3337
 
 The complete archives also include:
 
-- **`CHANGELOG.md`** - Detailed changelog with commit history, authors, and dates
+- **`CHANGELOG.md`** - Curated changelog with human-friendly summaries across versions
 - **`DEPLOYMENT.md`** - Comprehensive deployment guide for production setups
 - **`nginx.conf.example`** - Example nginx configuration for reverse proxy setup
 - **`README.md`** - Quick start guide and usage instructions

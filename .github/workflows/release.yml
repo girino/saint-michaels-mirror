@@ -91,53 +91,7 @@ jobs:
         cd dist
         sha256sum * > checksums.txt
 
-    - name: Create Changelog File
-      run: |
-        # Create changelog file header
-        {
-          echo "# Changelog - Espelho de São Miguel ${{ github.ref_name }}"
-          echo ""
-        } > CHANGELOG.md
-        
-        # Find the last proper semantic version tag (vX.X.X format)
-        LAST_SEMANTIC_TAG=$(git tag -l | grep -E "^v[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -1 || echo "")
-        
-        if [ -n "$LAST_SEMANTIC_TAG" ]; then
-          echo "## Changes since $LAST_SEMANTIC_TAG" >> CHANGELOG.md
-          echo "" >> CHANGELOG.md
-          git log --pretty=format:"- %s (%an, %ad)" --date=short $LAST_SEMANTIC_TAG..HEAD >> CHANGELOG.md
-        else
-          # No previous semantic version, include all changes
-          echo "## Changes since beginning" >> CHANGELOG.md
-          echo "" >> CHANGELOG.md
-          git log --pretty=format:"- %s (%an, %ad)" --date=short HEAD >> CHANGELOG.md
-        fi
-        
-        # Append footer
-        {
-          echo ""
-          echo "---"
-          echo ""
-          echo "**Espelho de São Miguel** - A Nostr relay aggregator built on khatru"
-          echo "Copyright (c) 2025 Girino Vey. Licensed under Girino's Anarchist License (GAL)."
-        } >> CHANGELOG.md
-
-    - name: Generate changelog
-      id: changelog
-      run: |
-        # Get the previous tag
-        PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
-        
-        # Generate changelog
-        if [ -n "$PREVIOUS_TAG" ]; then
-          CHANGELOG=$(git log --pretty=format:"- %s" $PREVIOUS_TAG..HEAD)
-        else
-          CHANGELOG=$(git log --pretty=format:"- %s" HEAD)
-        fi
-        
-        echo "changelog<<EOF" >> $GITHUB_OUTPUT
-        echo "$CHANGELOG" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+    # Removed auto-generated changelog; curated CHANGELOG.md is maintained in repo
 
     - name: Create Release
       id: create_release
@@ -151,7 +105,6 @@ jobs:
         sed -e "s/{{VERSION}}/${{ github.ref_name }}/g" \
             -e "s/{{REGISTRY}}/ghcr.io\/girino\/saint-michaels-mirror/g" \
             -e "s/{{IMAGE_NAME}}/saint-michaels-mirror/g" \
-            -e "s/{{CHANGELOG}}/See [CHANGELOG.md](https:\/\/github.com\/girino\/saint-michaels-mirror\/releases\/download\/${{ github.ref_name }}\/CHANGELOG.md) for detailed changes./g" \
             .github/workflows/release-body-template.md > release_body.md
         
         # Create the release using GitHub CLI
@@ -202,6 +155,6 @@ jobs:
         gh release upload "${{ github.ref_name }}" ./dist/saint-michaels-mirror-${{ github.ref_name }}-complete.tar.gz
         gh release upload "${{ github.ref_name }}" ./dist/saint-michaels-mirror-${{ github.ref_name }}-complete.zip
         
-        # Upload checksums and changelog
+        # Upload checksums and curated changelog
         gh release upload "${{ github.ref_name }}" ./dist/checksums.txt
-        gh release upload "${{ github.ref_name }}" ./CHANGELOG.md
+        if [ -f CHANGELOG.md ]; then gh release upload "${{ github.ref_name }}" ./CHANGELOG.md; fi
