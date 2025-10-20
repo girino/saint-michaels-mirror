@@ -1,0 +1,26 @@
+name: Print Git Log (Test)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  print-log:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Fetch full history and tags
+      run: |
+        git fetch --prune --unshallow --tags 2>/dev/null || true
+        git fetch --prune --tags
+
+    - name: Show last 200 commits (with authors and dates)
+      run: |
+        git log --pretty=format:"- %s (%an, %ad)" --date=short -n 200
+
