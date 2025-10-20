@@ -1,29 +1,49 @@
 # Changelog - Espelho de São Miguel
 
-Human-friendly, user-focused changes. CI/CD and infra-only changes are omitted.
+Human-friendly, user-focused changes. CI/CD and infra-only changes are de-emphasized.
 
-## [v1.0.0-rc4] - 2025-10-20
-### Improvements
-- Deployment guide: clearer steps using release archives; added `nak` example for quick testing.
-- Verification docs: corrected NIP-11 `Accept` header and added WebSocket URL guidance.
+## v1.0.0-rc4 — 2025-10-20
+- Preparations for launch and documentation improvements (no functional changes).
+  - Deployment guide tightened (archive-first flow, `nak` example).
+  - Verification docs: NIP-11 `Accept` header fixed; WebSocket URL guidance.
 
-Note: No functional changes to the relay behavior in this release candidate.
+## v1.0.0-rc3 — 2025-10-19
+- Release packaging refinements (no functional changes).
+  - Complete archives include binaries, static assets, templates, `example.env`, `docker-compose.prod.yml`, `nginx.conf.example`, `DEPLOYMENT.md`.
 
-## [v1.0.0-rc3] - 2025-10-19
-### Added
-- Release archives now ship ready-to-run assets: binaries, static files, templates, `example.env`, `docker-compose.prod.yml`, `nginx.conf.example`, and `DEPLOYMENT.md`.
+## v1.0.0-rc2 — 2025-10-19
+- Build and release pipeline readiness (no functional changes).
+  - Multi-arch builds validated; workflows stabilized.
 
-### Improvements
-- Easier out-of-the-box setup for Docker Compose and standalone usage.
+## v1.0.0-rc1 — 2025-10-18
+- Feature-freeze snapshot before launch (no new functionality added here).
 
-## [Earlier]
-### Major features and changes
-- Renamed service from `khatru-relay` to `saint-michaels-mirror` with updated paths and assets.
-- Added `/api/v1/health` and `/api/v1/stats` endpoints with backend health integration.
-- New human-readable pages at `/health` and `/stats` with auto-refresh and shared layout.
-- Implemented template inheritance; extracted and unified CSS/JS; branding polished.
-- Relaystore health tracking with GREEN/YELLOW/RED status and failure thresholds; runtime metrics (goroutines, memory).
-- Accurate timing metrics for publish, query, and count operations.
-- Dockerfile and deployment flow improved; Tor/NGINX examples for production.
+## Earlier (pre-rc1) — Key functionality delivered
+- Relay aggregation core: forwards publish and query operations to configured remote relays.
+- Health model with relaystore counters:
+  - Tracks consecutive failures for publish and query; resets counters on success.
+  - Health states: GREEN (no failures), YELLOW (some failures), RED (≥10 consecutive failures).
+  - Overall “main” health reflects the worst of publish/query.
+- Stats and runtime metrics:
+  - Goroutine count, memory usage, and other runtime indicators.
+  - Timing metrics for publish, query, and count operations.
+  - Query timing measures full flow including `EnsureRelay()` and `FetchMany()` and the goroutine duration.
+- API endpoints:
+  - `/api/v1/health`: HTTP status reflects backend health; JSON health details.
+  - `/api/v1/stats`: Aggregated runtime metrics, timings, and health states.
+  - NIP-11 served at `/` when `Accept: application/nostr+json` is provided.
+- Web UI:
+  - Human-readable pages: `/` (main), `/health`, `/stats` with auto-refresh every 10s.
+  - Shared base template; 2-column layout; consistent footer and branding.
+  - Externalized CSS/JS; dynamic version and names (instance name from config, project data from NIP-11 `Software`).
+- Operational improvements (user-impacting):
+  - Docker Compose production file with app healthcheck.
+  - Dockerfile copies static/templates correctly; multi-arch ready.
+  - Example environment (`example.env`) including `COMPOSE_RELAY_PORT=3337`.
+  - Nginx example configuration for production deployments.
+  - Tor container setup updated; removed unnecessary capabilities.
+- Cleanups:
+  - Removed `slicestore`.
+  - Ignored binary in `.gitignore`.
 
 
