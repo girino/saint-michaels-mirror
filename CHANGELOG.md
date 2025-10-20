@@ -1,31 +1,29 @@
 # Changelog - Espelho de São Miguel
 
-All notable changes to this project will be documented in this file.
+Human-friendly, user-focused changes. CI/CD and infra-only changes are omitted.
 
 ## [v1.0.0-rc4] - 2025-10-20
-### Added
-- Curated changelog format replacing auto-generated git log.
+### Improvements
+- Deployment guide: clearer steps using release archives; added `nak` example for quick testing.
+- Verification docs: corrected NIP-11 `Accept` header and added WebSocket URL guidance.
 
-### Changed
-- Release workflow now fetches full git history and tags reliably.
-- Changelog generation moved from automatic to curated approach.
-- Deployment guide updated to use release archives; added nak usage for testing.
-- Release notes template improved; clarified verification endpoints and WebSocket URL.
+Note: No functional changes to the relay behavior in this release candidate.
 
 ## [v1.0.0-rc3] - 2025-10-19
 ### Added
-- Complete archives now include static assets, templates, example.env, docker-compose, nginx example, and deployment guide.
+- Release archives now ship ready-to-run assets: binaries, static files, templates, `example.env`, `docker-compose.prod.yml`, `nginx.conf.example`, and `DEPLOYMENT.md`.
 
-### Changed
-- Multi-arch Docker builds and binaries in releases (linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, windows/amd64, windows/arm64).
-- Release body now generated from external template with variable substitution.
+### Improvements
+- Easier out-of-the-box setup for Docker Compose and standalone usage.
 
 ## [Earlier]
-- Major refactor from `khatru-relay` to `saint-michaels-mirror`.
-- Health and stats endpoints moved to `/api/v1/health` and `/api/v1/stats`.
-- Added human-readable `/health` and `/stats` pages with auto-refresh.
-- Implemented template inheritance; extracted CSS/JS; UI/branding fixes.
-- Relaystore health checks with consecutive failure thresholds; runtime metrics.
-- Docker and deployment improvements; Tor config; nginx example.
+### Major features and changes
+- Renamed service from `khatru-relay` to `saint-michaels-mirror` with updated paths and assets.
+- Added `/api/v1/health` and `/api/v1/stats` endpoints with backend health integration.
+- New human-readable pages at `/health` and `/stats` with auto-refresh and shared layout.
+- Implemented template inheritance; extracted and unified CSS/JS; branding polished.
+- Relaystore health tracking with GREEN/YELLOW/RED status and failure thresholds; runtime metrics (goroutines, memory).
+- Accurate timing metrics for publish, query, and count operations.
+- Dockerfile and deployment flow improved; Tor/NGINX examples for production.
 
 
