@@ -9,7 +9,7 @@ version: '3.8'
 
 services:
   relay:
-    image: "${PROD_IMAGE:-ghcr.io/girino/saint-michaels-mirror:latest}"
+    image: "${PROD_IMAGE:-ghcr.io/girino/saint-michaels-mirror/saint-michaels-mirror:latest}"
     restart: unless-stopped
     env_file: .env
     environment:
