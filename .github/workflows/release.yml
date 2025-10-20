@@ -15,9 +15,15 @@ jobs:
     permissions:
       contents: write
       packages: write
+
     steps:
-    - name: Checkout
+    - name: Checkout repository
       uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.24.1'
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -35,8 +41,10 @@ jobs:
       with:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
         tags: |
-          type=ref,event=tag
-          type=raw,value=latest,enable={{is_default_branch}}
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
+          type=raw,value=latest
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
@@ -46,41 +54,47 @@ jobs:
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
 
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-        go-version: '1.21'
-
-    - name: Build binaries
-        run: |
+    - name: Build binaries for multiple architectures
+      run: |
         mkdir -p dist
         
-        # Build for multiple platforms
-        GOOS=linux GOARCH=amd64 go build -ldflags "-X main.Version=${{ github.ref_name }}" -o dist/saint-michaels-mirror-linux-amd64 ./cmd/saint-michaels-mirror
-        GOOS=linux GOARCH=arm64 go build -ldflags "-X main.Version=${{ github.ref_name }}" -o dist/saint-michaels-mirror-linux-arm64 ./cmd/saint-michaels-mirror
-        GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.Version=${{ github.ref_name }}" -o dist/saint-michaels-mirror-darwin-amd64 ./cmd/saint-michaels-mirror
-        GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.Version=${{ github.ref_name }}" -o dist/saint-michaels-mirror-darwin-arm64 ./cmd/saint-michaels-mirror
-        GOOS=windows GOARCH=amd64 go build -ldflags "-X main.Version=${{ github.ref_name }}" -o dist/saint-michaels-mirror-windows-amd64.exe ./cmd/saint-michaels-mirror
-        GOOS=windows GOARCH=arm64 go build -ldflags "-X main.Version=${{ github.ref_name }}" -o dist/saint-michaels-mirror-windows-arm64.exe ./cmd/saint-michaels-mirror
+        # Build for Linux AMD64
+        GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist/saint-michaels-mirror-linux-amd64 ./cmd/saint-michaels-mirror
+        
+        # Build for Linux ARM64
+        GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o dist/saint-michaels-mirror-linux-arm64 ./cmd/saint-michaels-mirror
+        
+        # Build for macOS AMD64
+        GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o dist/saint-michaels-mirror-darwin-amd64 ./cmd/saint-michaels-mirror
+        
+        # Build for macOS ARM64 (Apple Silicon)
+        GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/saint-michaels-mirror-darwin-arm64 ./cmd/saint-michaels-mirror
+        
+        # Build for Windows AMD64
+        GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o dist/saint-michaels-mirror-windows-amd64.exe ./cmd/saint-michaels-mirror
+        
+        # Build for Windows ARM64
+        GOOS=windows GOARCH=arm64 go build -ldflags="-s -w" -o dist/saint-michaels-mirror-windows-arm64.exe ./cmd/saint-michaels-mirror
 
     - name: Generate checksums
-        run: |
+      run: |
         cd dist
         sha256sum * > checksums.txt
 
-    - name: Generate Changelog
+    - name: Generate changelog
       id: changelog
-        run: |
+      run: |
         # Get the previous tag
         PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
         
-        if [ -z "$PREVIOUS_TAG" ]; then
-          # If no previous tag, get all commits since the beginning
-          CHANGELOG=$(git log --oneline --pretty=format:"- %s" | head -20)
+        # Generate changelog
+        if [ -n "$PREVIOUS_TAG" ]; then
+          CHANGELOG=$(git log --pretty=format:"- %s" $PREVIOUS_TAG..HEAD)
         else
-          # Get commits since the previous tag
-          CHANGELOG=$(git log --oneline --pretty=format:"- %s" ${PREVIOUS_TAG}..HEAD)
+          CHANGELOG=$(git log --pretty=format:"- %s" HEAD)
         fi
         
         echo "changelog<<EOF" >> $GITHUB_OUTPUT
@@ -89,148 +103,166 @@ jobs:
 
     - name: Create Release
       id: create_release
-      run: |
-        # Generate release body from template with variable substitutions
-        sed -e "s/{{VERSION}}/${{ github.ref_name }}/g" \
-            -e "s/{{REGISTRY}}/ghcr.io\/girino\/saint-michaels-mirror/g" \
-            -e "s/{{IMAGE_NAME}}/saint-michaels-mirror/g" \
-            -e "s/{{CHANGELOG}}/${{ steps.changelog.outputs.changelog }}/g" \
-            .github/workflows/release-body-template.md > release_body.md
-        
-        # Create release using GitHub CLI
-        gh release create "${{ github.ref_name }}" \
-          --title "Espelho de São Miguel ${{ github.ref_name }}" \
-          --notes-file release_body.md \
-          --prerelease \
-          --generate-notes=false
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref_name }}
+        release_name: Release ${{ github.ref_name }}
+        body: |
+          ## Espelho de São Miguel ${{ github.ref_name }}
+          
+          A Nostr relay aggregator built on khatru that forwards events between multiple relays.
+          
+          ### Docker Images
+          - `${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}`
+          - `${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest`
+          
+          ### Binary Downloads
+          Download the appropriate binary for your platform:
+          - **Linux AMD64**: `saint-michaels-mirror-linux-amd64`
+          - **Linux ARM64**: `saint-michaels-mirror-linux-arm64`
+          - **macOS AMD64**: `saint-michaels-mirror-darwin-amd64`
+          - **macOS ARM64 (Apple Silicon)**: `saint-michaels-mirror-darwin-arm64`
+          - **Windows AMD64**: `saint-michaels-mirror-windows-amd64.exe`
+          - **Windows ARM64**: `saint-michaels-mirror-windows-arm64.exe`
+          
+          ### Changes
+          ${{ steps.changelog.outputs.changelog }}
+          
+          ## Quick Start
+          
+          ### Option 1: Docker (Recommended)
+          
+          #### Basic Usage
+          ```bash
+          docker run -d \
+            --name saint-michaels-mirror \
+            -p 3337:3337 \
+            -e RELAY_NAME="Your Relay Name" \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+          ```
+          
+          #### With Custom Configuration
+          ```bash
+          # Create a .env file with your configuration
+          cat > .env << EOF
+          RELAY_NAME=My Nostr Relay
+          RELAY_DESCRIPTION=A Nostr relay aggregator
+          RELAY_CONTACT=your-npub-here
+          RELAY_SERVICE_URL=https://your-relay.com
+          PUBLISH_REMOTES=wss://relay1.example.com,wss://relay2.example.com
+          QUERY_REMOTES=wss://relay1.example.com,wss://relay2.example.com
+          EOF
+          
+          # Run with custom configuration
+          docker run -d \
+            --name saint-michaels-mirror \
+            -p 3337:3337 \
+            --env-file .env \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+          ```
+          
+          #### Using Docker Compose
+          ```bash
+          # Clone the repository and use the provided docker-compose.prod.yml
+          git clone https://github.com/girino/saint-michaels-mirror.git
+          cd saint-michaels-mirror
+          cp example.env .env
+          # Edit .env with your configuration
+          docker compose -f docker-compose.prod.yml up -d
+          ```
+          
+          ### Option 2: Standalone Binary
+          
+          #### Linux/macOS
+          ```bash
+          # Download the appropriate binary
+          wget https://github.com/girino/saint-michaels-mirror/releases/download/${{ github.ref_name }}/saint-michaels-mirror-linux-amd64
+          chmod +x saint-michaels-mirror-linux-amd64
+          
+          # Set environment variables
+          export RELAY_NAME="Your Relay Name"
+          export RELAY_DESCRIPTION="A Nostr relay aggregator"
+          export PUBLISH_REMOTES="wss://relay1.example.com,wss://relay2.example.com"
+          export QUERY_REMOTES="wss://relay1.example.com,wss://relay2.example.com"
+          
+          # Run the relay
+          ./saint-michaels-mirror-linux-amd64 --addr=:3337
+          ```
+          
+          #### Windows
+          ```cmd
+          # Download the Windows binary
+          curl -LO https://github.com/girino/saint-michaels-mirror/releases/download/${{ github.ref_name }}/saint-michaels-mirror-windows-amd64.exe
+          
+          # Set environment variables
+          set RELAY_NAME=Your Relay Name
+          set RELAY_DESCRIPTION=A Nostr relay aggregator
+          set PUBLISH_REMOTES=wss://relay1.example.com,wss://relay2.example.com
+          set QUERY_REMOTES=wss://relay1.example.com,wss://relay2.example.com
+          
+          # Run the relay
+          saint-michaels-mirror-windows-amd64.exe --addr=:3337
+          ```
+          
+          ## Configuration
+          
+          ### Required Environment Variables
+          - `RELAY_NAME` - Display name of your relay
+          - `PUBLISH_REMOTES` - Comma-separated list of relays to forward published events to
+          - `QUERY_REMOTES` - Comma-separated list of relays to query events from
+          
+          ### Optional Environment Variables
+          - `RELAY_DESCRIPTION` - Description of your relay
+          - `RELAY_CONTACT` - Contact information (npub, email, etc.)
+          - `RELAY_SERVICE_URL` - Public URL of your relay
+          - `RELAY_ICON` - Path to relay icon (for Docker)
+          - `RELAY_BANNER` - Path to relay banner (for Docker)
+          - `ADDR` - Address to listen on (default: :3337)
+          - `VERBOSE` - Enable verbose logging (1 to enable)
+          
+          ## Verification
+          
+          After starting the relay, you can verify it's working:
+          
+          ```bash
+          # Check NIP-11 relay information
+          curl http://localhost:3337/.well-known/nostr.json
+          
+          # Check health status
+          curl http://localhost:3337/api/v1/health
+          
+          # Check statistics
+          curl http://localhost:3337/api/v1/stats
+          ```
+          
+          ## Support
+          
+          - **Documentation**: [GitHub Repository](https://github.com/girino/saint-michaels-mirror)
+          - **Issues**: [GitHub Issues](https://github.com/girino/saint-michaels-mirror/issues)
+          - **License**: Girino's Anarchist License (GAL) - [License Details](https://license.girino.org/)
+        draft: false
+        prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
 
     - name: Create Binary Archive
       run: |
         cd dist
-        
-        # Create a complete release directory with binaries and assets
-        mkdir -p saint-michaels-mirror-${{ github.ref_name }}
-        
-        # Copy binaries
-        cp *.exe saint-michaels-mirror-${{ github.ref_name }}/ 2>/dev/null || true
-        cp saint-michaels-mirror-* saint-michaels-mirror-${{ github.ref_name }}/ 2>/dev/null || true
-        cp checksums.txt saint-michaels-mirror-${{ github.ref_name }}/ 2>/dev/null || true
-        
-        # Copy static and template folders
-        cp -r ../cmd/saint-michaels-mirror/static saint-michaels-mirror-${{ github.ref_name }}/
-        cp -r ../cmd/saint-michaels-mirror/templates saint-michaels-mirror-${{ github.ref_name }}/
-        
-        # Copy example.env as a template
-        cp ../example.env saint-michaels-mirror-${{ github.ref_name }}/
-        
-        # Copy docker-compose files for easy deployment
-        cp ../docker-compose.prod.yml saint-michaels-mirror-${{ github.ref_name }}/
-        cp ../Dockerfile saint-michaels-mirror-${{ github.ref_name }}/ 2>/dev/null || true
-        cp ../nginx.conf.example saint-michaels-mirror-${{ github.ref_name }}/ 2>/dev/null || true
-        cp ../DEPLOYMENT.md saint-michaels-mirror-${{ github.ref_name }}/ 2>/dev/null || true
-        
-        # Create README for the release
-        cat > saint-michaels-mirror-${{ github.ref_name }}/README.md << 'EOF'
-        # Espelho de São Miguel ${{ github.ref_name }}
-        
-        This archive contains the Espelho de São Miguel Nostr relay aggregator binaries and assets.
-        
-        ## Contents
-        
-        - **Binaries**: Platform-specific executable files
-        - **static/**: Web interface assets (CSS, JavaScript, images)
-        - **templates/**: HTML templates for the web interface
-        - **.env.example**: Example configuration file
-        - **docker-compose.prod.yml**: Production Docker Compose configuration
-        - **Dockerfile**: Docker image build file
-        - **nginx.conf.example**: Example nginx configuration for production
-        - **DEPLOYMENT.md**: Comprehensive deployment guide
-        - **checksums.txt**: SHA256 checksums for verification
-        
-        ## Quick Start
-        
-        ### Option 1: Docker Compose (Recommended)
-        1. Extract this archive
-        2. Copy `.env.example` to `.env` and configure your settings
-        3. Run with Docker Compose:
-           ```bash
-           docker compose -f docker-compose.prod.yml up -d
-           ```
-        
-        ### Option 2: Standalone Binary
-        1. Extract this archive
-        2. Copy `.env.example` to `.env` and configure your settings
-        3. Run the appropriate binary for your platform:
-           - Linux: `./saint-michaels-mirror-linux-amd64`
-           - macOS: `./saint-michaels-mirror-darwin-amd64` or `./saint-michaels-mirror-darwin-arm64`
-           - Windows: `saint-michaels-mirror-windows-amd64.exe`
-        
-        ### Option 3: Production with Nginx
-        1. Extract this archive
-        2. Copy `.env.example` to `.env` and configure your settings
-        3. Deploy with Docker Compose or standalone binary (see above)
-        4. Configure nginx using `nginx.conf.example`
-        5. Set up SSL with certbot
-        6. See `DEPLOYMENT.md` for complete production setup guide
-        
-        ## Configuration
-        
-        See `.env.example` for configuration options. Key variables:
-        - `RELAY_NAME`: Display name of your relay
-        - `PUBLISH_REMOTES`: Comma-separated list of relays to forward published events to
-        - `QUERY_REMOTES`: Comma-separated list of relays to query events from
-        - `ADDR`: Address to listen on (default: :3337)
-        - `VERBOSE`: Enable verbose logging (1 to enable)
-        - `PROD_IMAGE`: Docker image to use (defaults to latest if not set)
-        
-        ## Verification
-        
-        After starting the relay, you can verify it's working:
-        
-        ```bash
-        # Check NIP-11 relay information
-        curl http://localhost:3337/
-        
-        # Check health status
-        curl http://localhost:3337/api/v1/health
-        
-        # Check statistics
-        curl http://localhost:3337/api/v1/stats
-        ```
-        
-        ## Support
-        
-        - **Documentation**: https://github.com/girino/saint-michaels-mirror
-        - **Issues**: https://github.com/girino/saint-michaels-mirror/issues
-        - **License**: Girino's Anarchist License (GAL) - https://license.girino.org/
-        EOF
-        
-        # Create tar.gz archive (for Linux/macOS users)
-        tar -czf saint-michaels-mirror-${{ github.ref_name }}-complete.tar.gz saint-michaels-mirror-${{ github.ref_name }}/
-        
-        # Create zip archive (for Windows users)
-        zip -r saint-michaels-mirror-${{ github.ref_name }}-complete.zip saint-michaels-mirror-${{ github.ref_name }}/
-        
+        tar -czf saint-michaels-mirror-${{ github.ref_name }}-binaries.tar.gz *
         ls -la
 
-    - name: Upload Complete Archives
-      run: |
-        # Upload tar.gz archive (for Linux/macOS users)
-        curl -X POST \
-          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          -H "Content-Type: application/gzip" \
-          --data-binary @./dist/saint-michaels-mirror-${{ github.ref_name }}-complete.tar.gz \
-          "${{ steps.create_release.outputs.upload_url }}?name=saint-michaels-mirror-${{ github.ref_name }}-complete.tar.gz"
-        
-        # Upload zip archive (for Windows users)
-        curl -X POST \
-          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          -H "Content-Type: application/zip" \
-          --data-binary @./dist/saint-michaels-mirror-${{ github.ref_name }}-complete.zip \
-          "${{ steps.create_release.outputs.upload_url }}?name=saint-michaels-mirror-${{ github.ref_name }}-complete.zip"
+    - name: Upload Release Assets
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/saint-michaels-mirror-${{ github.ref_name }}-binaries.tar.gz
+        asset_name: saint-michaels-mirror-${{ github.ref_name }}-binaries.tar.gz
+        asset_content_type: application/gzip
 
     - name: Upload Individual Binaries
-        run: |
+      run: |
         cd dist
         for file in *; do
           if [ "$file" != "checksums.txt" ]; then
@@ -240,13 +272,12 @@ jobs:
               -H "Content-Type: application/octet-stream" \
               --data-binary @"$file" \
               "${{ steps.create_release.outputs.upload_url }}?name=$file"
-            fi
-          done
-
-    - name: Upload Checksums
-      run: |
+          fi
+        done
+        
+        echo "Uploading checksums.txt"
         curl -X POST \
           -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
           -H "Content-Type: text/plain" \
-          --data-binary @./dist/checksums.txt \
+          --data-binary @checksums.txt \
           "${{ steps.create_release.outputs.upload_url }}?name=checksums.txt"
