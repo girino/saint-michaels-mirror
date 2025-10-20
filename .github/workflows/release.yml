@@ -20,10 +20,10 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.24.1'
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24.1'
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -58,7 +58,7 @@ jobs:
         cache-to: type=gha,mode=max
 
     - name: Build binaries for multiple architectures
-      run: |
+        run: |
         mkdir -p dist
         
         # Build for Linux AMD64
