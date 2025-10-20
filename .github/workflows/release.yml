@@ -20,10 +20,10 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.24.1'
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24.1'
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -48,7 +48,7 @@ jobs:
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
-      with:
+        with:
         context: .
         platforms: linux/amd64,linux/arm64
         push: true
@@ -58,7 +58,7 @@ jobs:
         cache-to: type=gha,mode=max
 
     - name: Build binaries for multiple architectures
-      run: |
+        run: |
         mkdir -p dist
         
         # Build for Linux AMD64
@@ -86,31 +86,37 @@ jobs:
 
     - name: Create Changelog File
       run: |
-        # Find the last proper semantic version tag (vX.X.X format)
-        LAST_SEMANTIC_TAG=$(git tag -l | grep -E "^v[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -1 || echo "")
-        
-        if [ -n "$LAST_SEMANTIC_TAG" ]; then
-          CHANGELOG=$(git log --pretty=format:"- %s (%an, %ad)" --date=short $LAST_SEMANTIC_TAG..HEAD)
-          CHANGELOG_SINCE="since $LAST_SEMANTIC_TAG"
-        else
-          # No previous semantic version, include all changes
+        # For pre-releases (alpha, beta, rc), always show all changes since beginning
+        if [[ "${{ github.ref_name }}" == *"alpha"* || "${{ github.ref_name }}" == *"beta"* || "${{ github.ref_name }}" == *"rc"* ]]; then
           CHANGELOG=$(git log --pretty=format:"- %s (%an, %ad)" --date=short HEAD)
           CHANGELOG_SINCE="since beginning"
+        else
+          # For regular releases, find the last proper semantic version tag (vX.X.X format)
+          LAST_SEMANTIC_TAG=$(git tag -l | grep -E "^v[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -1 || echo "")
+          
+          if [ -n "$LAST_SEMANTIC_TAG" ]; then
+            CHANGELOG=$(git log --pretty=format:"- %s (%an, %ad)" --date=short $LAST_SEMANTIC_TAG..HEAD)
+            CHANGELOG_SINCE="since $LAST_SEMANTIC_TAG"
+          else
+            # No previous semantic version, include all changes
+            CHANGELOG=$(git log --pretty=format:"- %s (%an, %ad)" --date=short HEAD)
+            CHANGELOG_SINCE="since beginning"
+          fi
         fi
         
         # Create changelog file
-        cat > CHANGELOG.md << EOF
-        # Changelog - Espelho de São Miguel ${{ github.ref_name }}
-
-        ## Changes $CHANGELOG_SINCE
-
-        $CHANGELOG
-
-        ---
-
-        **Espelho de São Miguel** - A Nostr relay aggregator built on khatru  
-        Copyright (c) 2025 Girino Vey. Licensed under Girino's Anarchist License (GAL).
-        EOF
+        {
+          echo "# Changelog - Espelho de São Miguel ${{ github.ref_name }}"
+          echo ""
+          echo "## Changes $CHANGELOG_SINCE"
+          echo ""
+          echo "$CHANGELOG"
+          echo ""
+          echo "---"
+          echo ""
+          echo "**Espelho de São Miguel** - A Nostr relay aggregator built on khatru"
+          echo "Copyright (c) 2025 Girino Vey. Licensed under Girino's Anarchist License (GAL)."
+        } > CHANGELOG.md
 
     - name: Generate changelog
       id: changelog
@@ -133,7 +139,7 @@ jobs:
       id: create_release
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
+        run: |
         # Delete existing release if it exists
         gh release delete "${{ github.ref_name }}" --yes 2>/dev/null || true
         
