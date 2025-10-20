@@ -4,9 +4,11 @@
 [![Docker Image](https://img.shields.io/badge/Docker-ghcr.io%2Fgirino%2Fsaint--michaels--mirror-blue)](https://github.com/girino/saint-michaels-mirror/pkgs/container/saint-michaels-mirror)
 [![Go Version](https://img.shields.io/badge/Go-1.24.1-blue.svg)](https://golang.org/)
 
-> The sacred mirror that stands between worlds, where every message is received, reflected, and transmitted without distortion under the Archangel's vigilant gaze.
+> The Espelho de São Miguel is the sacred mirror that stands between worlds, where every message is received, reflected, and transmitted without distortion under the Archangel’s vigilant gaze. It unites the power of Exu, opener of paths, with the harmony of Ibeji, the divine twins, ensuring that all light crossing its surface returns as truth.
 
 **Espelho de São Miguel** is a Nostr relay aggregator built on the [khatru](https://github.com/fiatjaf/khatru) framework. It acts as a mirror between worlds, forwarding events between multiple Nostr relays while providing a unified interface for Nostr applications.
+
+ 
 
 ## 🌟 Features
 

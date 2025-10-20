@@ -159,3 +159,9 @@ jobs:
         # Upload checksums and curated changelog
         gh release upload "${{ github.ref_name }}" ./dist/checksums.txt
         if [ -f CHANGELOG.md ]; then gh release upload "${{ github.ref_name }}" ./CHANGELOG.md; fi
+        
+        # Upload version-specific release notes if present (as RELEASE_NOTES.md)
+        if [ -f ".github/release-notes/${{ github.ref_name }}.md" ]; then
+          cp ".github/release-notes/${{ github.ref_name }}.md" RELEASE_NOTES.md
+          gh release upload "${{ github.ref_name }}" RELEASE_NOTES.md
+        fi
