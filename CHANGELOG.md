@@ -1,6 +1,6 @@
 # Changelog - Espelho de São Miguel
 
-Human-friendly, user-focused changes. CI/CD and infra-only changes are de-emphasized.
+Instruction for AI agents: prioritize human-friendly, user-facing functionality; de-emphasize CI/CD and infrastructure-only changes.
 
 ## v1.0.0-rc4 — 2025-10-20
 - Preparations for launch and documentation improvements (no functional changes).
