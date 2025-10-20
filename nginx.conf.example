@@ -64,7 +64,8 @@ server {
     proxy_send_timeout 86400s;
     proxy_connect_timeout 60s;
     
-    # Main relay endpoint - handles WebSocket connections
+    # Main relay endpoint - handles WebSocket connections and NIP-11
+    # NIP-11 relay information is served at / with Accept: application/nostr+json header
     location / {
         # Rate limiting
         limit_req zone=relay_limit burst=20 nodelay;
@@ -90,15 +91,8 @@ server {
         proxy_pass http://relay_backend;
     }
     
-    # NIP-11 endpoint - relay information
-    location /.well-known/nostr.json {
-        limit_req zone=api_limit burst=10 nodelay;
-        proxy_pass http://relay_backend;
-        
-        # Cache for 1 hour
-        expires 1h;
-        add_header Cache-Control "public";
-    }
+    # NIP-11 endpoint - relay information (served at root with Accept: application/nostr+json)
+    # This is handled by the main location / block above
     
     # Health check endpoint (if using external monitoring)
     location /health {
