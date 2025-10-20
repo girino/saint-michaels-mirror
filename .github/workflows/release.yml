@@ -163,11 +163,11 @@ jobs:
       run: |
         cd dist
         for file in *; do
-          if [ "$file" != "checksums.txt" ]; then
+          if [ -f "$file" ] && [ "$file" != "checksums.txt" ]; then
             echo "Uploading $file"
             gh release upload "${{ github.ref_name }}" "$file"
-          fi
-        done
-        
+            fi
+          done
+
         echo "Uploading checksums.txt"
         gh release upload "${{ github.ref_name }}" checksums.txt
