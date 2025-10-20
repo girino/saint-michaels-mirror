@@ -32,6 +32,8 @@ jobs:
       with:
         go-version: '1.24.1'
 
+    # Use the pushed tag name via github.ref_name directly
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
@@ -61,6 +63,8 @@ jobs:
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
+        build-args: |
+          VERSION=${{ github.ref_name }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
@@ -69,22 +73,22 @@ jobs:
         mkdir -p dist
         
         # Build for Linux AMD64
-        GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist/saint-michaels-mirror-linux-amd64 ./cmd/saint-michaels-mirror
+        GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.Version=${{ github.ref_name }}" -o dist/saint-michaels-mirror-linux-amd64 ./cmd/saint-michaels-mirror
         
         # Build for Linux ARM64
-        GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o dist/saint-michaels-mirror-linux-arm64 ./cmd/saint-michaels-mirror
+        GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X main.Version=${{ github.ref_name }}" -o dist/saint-michaels-mirror-linux-arm64 ./cmd/saint-michaels-mirror
         
         # Build for macOS AMD64
-        GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o dist/saint-michaels-mirror-darwin-amd64 ./cmd/saint-michaels-mirror
+        GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.Version=${{ github.ref_name }}" -o dist/saint-michaels-mirror-darwin-amd64 ./cmd/saint-michaels-mirror
         
         # Build for macOS ARM64 (Apple Silicon)
-        GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/saint-michaels-mirror-darwin-arm64 ./cmd/saint-michaels-mirror
+        GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.Version=${{ github.ref_name }}" -o dist/saint-michaels-mirror-darwin-arm64 ./cmd/saint-michaels-mirror
         
         # Build for Windows AMD64
-        GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o dist/saint-michaels-mirror-windows-amd64.exe ./cmd/saint-michaels-mirror
+        GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.Version=${{ github.ref_name }}" -o dist/saint-michaels-mirror-windows-amd64.exe ./cmd/saint-michaels-mirror
         
         # Build for Windows ARM64
-        GOOS=windows GOARCH=arm64 go build -ldflags="-s -w" -o dist/saint-michaels-mirror-windows-arm64.exe ./cmd/saint-michaels-mirror
+        GOOS=windows GOARCH=arm64 go build -ldflags="-s -w -X main.Version=${{ github.ref_name }}" -o dist/saint-michaels-mirror-windows-arm64.exe ./cmd/saint-michaels-mirror
 
     - name: Generate checksums
       run: |

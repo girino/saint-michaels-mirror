@@ -10,6 +10,10 @@ package main
 // ProjectName is the display name of the project
 const ProjectName = "Espelho de São Miguel"
 
-// Version is the semantic version string used across the relay.
-// Update this value before creating a release.
-const Version = "1.0.0"
+// Version is the application version string.
+// It is meant to be overridden at build time via:
+//
+//	go build -ldflags "-X main.Version=<version>"
+//
+// Default value is for non-ldflags development builds.
+var Version = "dev"

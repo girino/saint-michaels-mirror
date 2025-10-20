@@ -27,8 +27,28 @@ set -a
 [ -f "${BASEDIR}/.env.local" ] && source "${BASEDIR}/.env.local"
 set +a
 
-echo "Building..."
-go build -o bin/saint-michaels-mirror ./cmd/saint-michaels-mirror
+echo "Determining version from git..."
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    # Prefer the most recent annotated or lightweight tag reachable from HEAD
+    if GIT_TAG=$(git describe --tags --abbrev=0 2>/dev/null); then
+        VERSION="$GIT_TAG"
+    else
+        # Fall back to short commit with -dev suffix
+        GIT_SHA=$(git rev-parse --short HEAD)
+        VERSION="${GIT_SHA}-dev"
+    fi
+    # Mark dirty working trees
+    if ! git diff --quiet --ignore-submodules HEAD -- 2>/dev/null; then
+        VERSION="${VERSION}+dirty"
+    fi
+else
+    VERSION="dev"
+fi
+
+echo "Building... (version: ${VERSION})"
+rm -f bin/saint-michaels-mirror
+GOFLAGS=${GOFLAGS:-}
+go build -ldflags "-X main.Version=${VERSION}" -o bin/saint-michaels-mirror ./cmd/saint-michaels-mirror
 
 echo "Starting Espelho de São Miguel (configuration comes from .env files)"
 exec ./bin/saint-michaels-mirror

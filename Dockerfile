@@ -22,11 +22,15 @@ RUN go mod download
 # Copy the source
 COPY . .
 
+# Build arguments for version injection (optional)
+ARG VERSION
+
 # Build the relay binary
 # If GOARCH is not provided, detect it from the build environment
 RUN ARCH=${GOARCH:-$(go env GOARCH)} && \
+    VSN=${VERSION:-dev} && \
     CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${ARCH} \
-    go build -ldflags "-X main.Version=$(grep 'const Version =' cmd/saint-michaels-mirror/version.go | cut -d'"' -f2)" -o /out/saint-michaels-mirror ./cmd/saint-michaels-mirror
+    go build -ldflags "-X main.Version=$${VSN}" -o /out/saint-michaels-mirror ./cmd/saint-michaels-mirror
 
 # Final minimal image
 FROM debian:bookworm-slim
