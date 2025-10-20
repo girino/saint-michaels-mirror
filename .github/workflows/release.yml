@@ -248,18 +248,127 @@ jobs:
     - name: Create Binary Archive
       run: |
         cd dist
-        tar -czf saint-michaels-mirror-${{ github.ref_name }}-binaries.tar.gz *
+        
+        # Create a complete release directory with binaries and assets
+        mkdir -p saint-michaels-mirror-${{ github.ref_name }}
+        
+        # Copy binaries
+        cp *.exe saint-michaels-mirror-${{ github.ref_name }}/ 2>/dev/null || true
+        cp saint-michaels-mirror-* saint-michaels-mirror-${{ github.ref_name }}/ 2>/dev/null || true
+        cp checksums.txt saint-michaels-mirror-${{ github.ref_name }}/ 2>/dev/null || true
+        
+        # Copy static and template folders
+        cp -r ../cmd/saint-michaels-mirror/static saint-michaels-mirror-${{ github.ref_name }}/
+        cp -r ../cmd/saint-michaels-mirror/templates saint-michaels-mirror-${{ github.ref_name }}/
+        
+        # Copy example.env as a template
+        cp ../example.env saint-michaels-mirror-${{ github.ref_name }}/
+        
+        # Copy docker-compose files for easy deployment
+        cp ../docker-compose.prod.yml saint-michaels-mirror-${{ github.ref_name }}/
+        cp ../Dockerfile saint-michaels-mirror-${{ github.ref_name }}/ 2>/dev/null || true
+        cp ../nginx.conf.example saint-michaels-mirror-${{ github.ref_name }}/ 2>/dev/null || true
+        cp ../DEPLOYMENT.md saint-michaels-mirror-${{ github.ref_name }}/ 2>/dev/null || true
+        
+        # Create README for the release
+        cat > saint-michaels-mirror-${{ github.ref_name }}/README.md << 'EOF'
+        # Espelho de São Miguel ${{ github.ref_name }}
+        
+        This archive contains the Espelho de São Miguel Nostr relay aggregator binaries and assets.
+        
+        ## Contents
+        
+        - **Binaries**: Platform-specific executable files
+        - **static/**: Web interface assets (CSS, JavaScript, images)
+        - **templates/**: HTML templates for the web interface
+        - **.env.example**: Example configuration file
+        - **docker-compose.prod.yml**: Production Docker Compose configuration
+        - **Dockerfile**: Docker image build file
+        - **nginx.conf.example**: Example nginx configuration for production
+        - **DEPLOYMENT.md**: Comprehensive deployment guide
+        - **checksums.txt**: SHA256 checksums for verification
+        
+        ## Quick Start
+        
+        ### Option 1: Docker Compose (Recommended)
+        1. Extract this archive
+        2. Copy `.env.example` to `.env` and configure your settings
+        3. Run with Docker Compose:
+           ```bash
+           docker compose -f docker-compose.prod.yml up -d
+           ```
+        
+        ### Option 2: Standalone Binary
+        1. Extract this archive
+        2. Copy `.env.example` to `.env` and configure your settings
+        3. Run the appropriate binary for your platform:
+           - Linux: `./saint-michaels-mirror-linux-amd64`
+           - macOS: `./saint-michaels-mirror-darwin-amd64` or `./saint-michaels-mirror-darwin-arm64`
+           - Windows: `saint-michaels-mirror-windows-amd64.exe`
+        
+        ### Option 3: Production with Nginx
+        1. Extract this archive
+        2. Copy `.env.example` to `.env` and configure your settings
+        3. Deploy with Docker Compose or standalone binary (see above)
+        4. Configure nginx using `nginx.conf.example`
+        5. Set up SSL with certbot
+        6. See `DEPLOYMENT.md` for complete production setup guide
+        
+        ## Configuration
+        
+        See `.env.example` for configuration options. Key variables:
+        - `RELAY_NAME`: Display name of your relay
+        - `PUBLISH_REMOTES`: Comma-separated list of relays to forward published events to
+        - `QUERY_REMOTES`: Comma-separated list of relays to query events from
+        - `ADDR`: Address to listen on (default: :3337)
+        - `VERBOSE`: Enable verbose logging (1 to enable)
+        - `PROD_IMAGE`: Docker image to use (defaults to latest if not set)
+        
+        ## Verification
+        
+        After starting the relay, you can verify it's working:
+        
+        ```bash
+        # Check NIP-11 relay information
+        curl http://localhost:3337/
+        
+        # Check health status
+        curl http://localhost:3337/api/v1/health
+        
+        # Check statistics
+        curl http://localhost:3337/api/v1/stats
+        ```
+        
+        ## Support
+        
+        - **Documentation**: https://github.com/girino/saint-michaels-mirror
+        - **Issues**: https://github.com/girino/saint-michaels-mirror/issues
+        - **License**: Girino's Anarchist License (GAL) - https://license.girino.org/
+        EOF
+        
+        # Create tar.gz archive (for Linux/macOS users)
+        tar -czf saint-michaels-mirror-${{ github.ref_name }}-complete.tar.gz saint-michaels-mirror-${{ github.ref_name }}/
+        
+        # Create zip archive (for Windows users)
+        zip -r saint-michaels-mirror-${{ github.ref_name }}-complete.zip saint-michaels-mirror-${{ github.ref_name }}/
+        
         ls -la
 
-    - name: Upload Release Assets
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/saint-michaels-mirror-${{ github.ref_name }}-binaries.tar.gz
-        asset_name: saint-michaels-mirror-${{ github.ref_name }}-binaries.tar.gz
-        asset_content_type: application/gzip
+    - name: Upload Complete Archives
+      run: |
+        # Upload tar.gz archive (for Linux/macOS users)
+        curl -X POST \
+          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          -H "Content-Type: application/gzip" \
+          --data-binary @./dist/saint-michaels-mirror-${{ github.ref_name }}-complete.tar.gz \
+          "${{ steps.create_release.outputs.upload_url }}?name=saint-michaels-mirror-${{ github.ref_name }}-complete.tar.gz"
+        
+        # Upload zip archive (for Windows users)
+        curl -X POST \
+          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          -H "Content-Type: application/zip" \
+          --data-binary @./dist/saint-michaels-mirror-${{ github.ref_name }}-complete.zip \
+          "${{ steps.create_release.outputs.upload_url }}?name=saint-michaels-mirror-${{ github.ref_name }}-complete.zip"
 
     - name: Upload Individual Binaries
       run: |
