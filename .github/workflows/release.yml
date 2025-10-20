@@ -58,7 +58,7 @@ jobs:
         cache-to: type=gha,mode=max
 
     - name: Build binaries for multiple architectures
-        run: |
+      run: |
         mkdir -p dist
         
         # Build for Linux AMD64
