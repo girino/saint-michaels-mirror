@@ -19,13 +19,7 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
 
-    - name: Fetch full history and tags
-      run: |
-        git fetch --prune --unshallow --tags 2>/dev/null || true
-        git fetch --prune --tags
 
     - name: Set up Go
       uses: actions/setup-go@v4
@@ -95,7 +89,6 @@ jobs:
         cd dist
         sha256sum * > checksums.txt
 
-    # Removed auto-generated changelog; curated CHANGELOG.md is maintained in repo
 
     - name: Create Release
       id: create_release
