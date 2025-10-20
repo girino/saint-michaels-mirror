@@ -156,18 +156,6 @@ jobs:
         # Upload complete archives
         gh release upload "${{ github.ref_name }}" ./dist/saint-michaels-mirror-${{ github.ref_name }}-complete.tar.gz
         gh release upload "${{ github.ref_name }}" ./dist/saint-michaels-mirror-${{ github.ref_name }}-complete.zip
-
-    - name: Upload Individual Binaries
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        cd dist
-        for file in *; do
-          if [ -f "$file" ] && [ "$file" != "checksums.txt" ]; then
-            echo "Uploading $file"
-            gh release upload "${{ github.ref_name }}" "$file"
-            fi
-          done
-
-        echo "Uploading checksums.txt"
-        gh release upload "${{ github.ref_name }}" checksums.txt
+        
+        # Upload checksums
+        gh release upload "${{ github.ref_name }}" ./dist/checksums.txt
