@@ -306,6 +306,8 @@ jobs:
         # Copy docker-compose files for easy deployment
         cp ../docker-compose.prod.yml saint-michaels-mirror-${{ github.ref_name }}/
         cp ../Dockerfile saint-michaels-mirror-${{ github.ref_name }}/ 2>/dev/null || true
+        cp ../nginx.conf.example saint-michaels-mirror-${{ github.ref_name }}/ 2>/dev/null || true
+        cp ../DEPLOYMENT.md saint-michaels-mirror-${{ github.ref_name }}/ 2>/dev/null || true
         
         # Create README for the release
         cat > saint-michaels-mirror-${{ github.ref_name }}/README.md << 'EOF'
@@ -321,6 +323,8 @@ jobs:
         - **.env.example**: Example configuration file
         - **docker-compose.prod.yml**: Production Docker Compose configuration
         - **Dockerfile**: Docker image build file
+        - **nginx.conf.example**: Example nginx configuration for production
+        - **DEPLOYMENT.md**: Comprehensive deployment guide
         - **checksums.txt**: SHA256 checksums for verification
         
         ## Quick Start
@@ -344,6 +348,14 @@ jobs:
            - Linux: `./saint-michaels-mirror-linux-amd64`
            - macOS: `./saint-michaels-mirror-darwin-amd64` or `./saint-michaels-mirror-darwin-arm64`
            - Windows: `saint-michaels-mirror-windows-amd64.exe`
+        
+        ### Option 3: Production with Nginx
+        1. Extract this archive
+        2. Copy `.env.example` to `.env` and configure your settings
+        3. Deploy with Docker Compose or standalone binary (see above)
+        4. Configure nginx using `nginx.conf.example`
+        5. Set up SSL with certbot
+        6. See `DEPLOYMENT.md` for complete production setup guide
         
         ## Configuration
         
