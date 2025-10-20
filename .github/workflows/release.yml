@@ -86,21 +86,23 @@ jobs:
 
     - name: Create Changelog File
       run: |
-        # Get the previous tag
-        PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+        # Find the last proper semantic version tag (vX.X.X format)
+        LAST_SEMANTIC_TAG=$(git tag -l | grep -E "^v[0-9]+\.[0-9]+\.[0-9]+$" | sort -V | tail -1 || echo "")
         
-        # Generate changelog
-        if [ -n "$PREVIOUS_TAG" ]; then
-          CHANGELOG=$(git log --pretty=format:"- %s" $PREVIOUS_TAG..HEAD)
+        if [ -n "$LAST_SEMANTIC_TAG" ]; then
+          CHANGELOG=$(git log --pretty=format:"- %s (%an, %ad)" --date=short $LAST_SEMANTIC_TAG..HEAD)
+          CHANGELOG_SINCE="since $LAST_SEMANTIC_TAG"
         else
-          CHANGELOG=$(git log --pretty=format:"- %s" HEAD)
+          # No previous semantic version, include all changes
+          CHANGELOG=$(git log --pretty=format:"- %s (%an, %ad)" --date=short HEAD)
+          CHANGELOG_SINCE="since beginning"
         fi
         
         # Create changelog file
         cat > CHANGELOG.md << EOF
         # Changelog - Espelho de São Miguel ${{ github.ref_name }}
 
-        ## Changes since ${PREVIOUS_TAG:-"beginning"}
+        ## Changes $CHANGELOG_SINCE
 
         $CHANGELOG
 

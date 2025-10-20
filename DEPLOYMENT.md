@@ -13,10 +13,11 @@ This guide provides comprehensive deployment instructions for Espelho de São Mi
 
 ### Option 1: Docker Compose (Recommended)
 
-1. **Clone the repository:**
+1. **Download and extract the release:**
    ```bash
-   git clone https://github.com/girino/saint-michaels-mirror.git
-   cd saint-michaels-mirror
+   wget https://github.com/girino/saint-michaels-mirror/releases/latest/download/saint-michaels-mirror-latest-complete.tar.gz
+   tar -xzf saint-michaels-mirror-latest-complete.tar.gz
+   cd saint-michaels-mirror-*/
    ```
 
 2. **Configure your relay:**
@@ -34,15 +35,17 @@ This guide provides comprehensive deployment instructions for Espelho de São Mi
 
 1. **Download and extract the release:**
    ```bash
-   wget https://github.com/girino/saint-michaels-mirror/releases/latest/download/saint-michaels-mirror-linux-amd64-complete.tar.gz
-   tar -xzf saint-michaels-mirror-linux-amd64-complete.tar.gz
+   wget https://github.com/girino/saint-michaels-mirror/releases/latest/download/saint-michaels-mirror-latest-complete.tar.gz
+   tar -xzf saint-michaels-mirror-latest-complete.tar.gz
    cd saint-michaels-mirror-*/
    ```
 
-2. **Configure:**
+2. **Set environment variables:**
    ```bash
-   cp .env.example .env
-   nano .env  # Edit with your configuration
+   export RELAY_NAME="Your Relay Name"
+   export RELAY_DESCRIPTION="A Nostr relay aggregator"
+   export PUBLISH_REMOTES="wss://relay1.example.com,wss://relay2.example.com"
+   export QUERY_REMOTES="wss://relay1.example.com,wss://relay2.example.com"
    ```
 
 3. **Run:**
@@ -199,10 +202,8 @@ sudo logrotate -f /etc/logrotate.conf
    tar -czf relay-config-backup-$(date +%Y%m%d).tar.gz .env docker-compose.prod.yml
    ```
 
-2. **Database backup (if using persistent storage):**
-   ```bash
-   docker exec saint-michaels-mirror tar -czf /backup/relay-data-$(date +%Y%m%d).tar.gz /data
-   ```
+2. **No persistent database:**
+   Espelho de São Miguel is a relay aggregator that forwards events to remote relays. It does not store events locally, so no database backup is needed.
 
 ## Performance Tuning
 
@@ -272,8 +273,14 @@ sysctl -p
 # Check relay statistics
 curl http://localhost:3337/api/v1/stats | jq
 
+# Check relay health
+curl http://localhost:3337/api/v1/health | jq
+
 # Test WebSocket connection
 wscat -c ws://localhost:3337
+
+# Test with nak (fiatjaf's Nostr client)
+nak req -k 1 -limit 5 ws://localhost:3337
 
 # Monitor network connections
 netstat -tulpn | grep :3337
