@@ -138,6 +138,7 @@ jobs:
         cp ../Dockerfile saint-michaels-mirror-${{ github.ref_name }}/ 2>/dev/null || true
         cp ../nginx.conf.example saint-michaels-mirror-${{ github.ref_name }}/ 2>/dev/null || true
         cp ../DEPLOYMENT.md saint-michaels-mirror-${{ github.ref_name }}/ 2>/dev/null || true
+        cp ../CHANGELOG.md saint-michaels-mirror-${{ github.ref_name }}/ 2>/dev/null || true
         
         # Create tar.gz archive (for Linux/macOS users)
         tar -czf saint-michaels-mirror-${{ github.ref_name }}-complete.tar.gz saint-michaels-mirror-${{ github.ref_name }}/
