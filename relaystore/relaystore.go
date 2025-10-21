@@ -114,9 +114,9 @@ type RelayStore struct {
 	mirrorCancel   context.CancelFunc
 	mirroredEvents int64
 	// mirroring health tracking
-	mirrorAttempts     int64
-	mirrorSuccesses    int64
-	mirrorFailures     int64
+	mirrorAttempts            int64
+	mirrorSuccesses           int64
+	mirrorFailures            int64
 	consecutiveMirrorFailures int64
 	// stats
 	publishAttempts     int64
@@ -181,12 +181,12 @@ type Stats struct {
 	TotalQueryDurationMs     int64   `json:"total_query_duration_ms"`
 	TotalCountDurationMs     int64   `json:"total_count_duration_ms"`
 	// Mirroring statistics
-	MirroredEvents int64 `json:"mirrored_events"`
-	MirrorAttempts int64 `json:"mirror_attempts"`
-	MirrorSuccesses int64 `json:"mirror_successes"`
-	MirrorFailures int64 `json:"mirror_failures"`
-	ConsecutiveMirrorFailures int64 `json:"consecutive_mirror_failures"`
-	MirrorHealthState string `json:"mirror_health_state"`
+	MirroredEvents            int64  `json:"mirrored_events"`
+	MirrorAttempts            int64  `json:"mirror_attempts"`
+	MirrorSuccesses           int64  `json:"mirror_successes"`
+	MirrorFailures            int64  `json:"mirror_failures"`
+	ConsecutiveMirrorFailures int64  `json:"consecutive_mirror_failures"`
+	MirrorHealthState         string `json:"mirror_health_state"`
 }
 
 // getHealthState determines the health state based on consecutive failures
@@ -280,12 +280,12 @@ func (r *RelayStore) Stats() Stats {
 		TotalQueryDurationMs:     totalQueryDurationNs / 1e6,   // Convert ns to ms
 		TotalCountDurationMs:     totalCountDurationNs / 1e6,   // Convert ns to ms
 		// Mirroring statistics
-		MirroredEvents: atomic.LoadInt64(&r.mirroredEvents),
-		MirrorAttempts: atomic.LoadInt64(&r.mirrorAttempts),
-		MirrorSuccesses: atomic.LoadInt64(&r.mirrorSuccesses),
-		MirrorFailures: atomic.LoadInt64(&r.mirrorFailures),
+		MirroredEvents:            atomic.LoadInt64(&r.mirroredEvents),
+		MirrorAttempts:            atomic.LoadInt64(&r.mirrorAttempts),
+		MirrorSuccesses:           atomic.LoadInt64(&r.mirrorSuccesses),
+		MirrorFailures:            atomic.LoadInt64(&r.mirrorFailures),
 		ConsecutiveMirrorFailures: consecutiveMirrorFailures,
-		MirrorHealthState: mirrorHealthState,
+		MirrorHealthState:         mirrorHealthState,
 	}
 }
 
@@ -935,10 +935,6 @@ func (r *RelayStore) mirrorFromRelays(ctx context.Context, relay *khatru.Relay) 
 
 	// subscribe to all query relays at once (handles deduplication)
 	sub := r.pool.SubMany(ctx, r.queryUrls, []nostr.Filter{filter})
-
-	// Track mirroring health
-	atomic.AddInt64(&r.mirrorAttempts, 1)
-	atomic.StoreInt64(&r.consecutiveMirrorFailures, 0) // Reset on successful start
 
 	for {
 		select {
