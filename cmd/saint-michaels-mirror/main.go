@@ -51,14 +51,18 @@ func main() {
 			}
 		}
 	}
+
+	// Decode nsec to hex if needed
+	decodedSec := sec
 	if sec != "" {
 		// try nip19 decode first
 		if strings.HasPrefix(sec, "nsec") {
 			if pfx, val, err := nip19.Decode(sec); err == nil && pfx == "nsec" {
 				if s, ok := val.(string); ok {
 					// s should be hex private key
-					// try hex decode
+					// try hex decode to validate
 					if _, err := hex.DecodeString(s); err == nil {
+						decodedSec = s
 						// derive pubkey
 						if pk, err := nostr.GetPublicKey(s); err == nil {
 							if r.Info.PubKey == "" {
@@ -71,6 +75,7 @@ func main() {
 		} else {
 			// assume it's hex
 			if _, err := hex.DecodeString(sec); err == nil {
+				decodedSec = sec
 				if pk, err := nostr.GetPublicKey(sec); err == nil {
 					if r.Info.PubKey == "" {
 						r.Info.PubKey = pk
@@ -85,13 +90,13 @@ func main() {
 	var rs *relaystore.RelayStore
 	if len(cfg.PublishRemotes) > 0 || len(cfg.QueryRemotes) > 0 {
 		if len(cfg.QueryRemotes) > 0 {
-			rs = relaystore.NewWithQueryRemotesAndRelayKey(cfg.PublishRemotes, cfg.QueryRemotes, sec)
+			rs = relaystore.NewWithQueryRemotesAndRelayKey(cfg.PublishRemotes, cfg.QueryRemotes, decodedSec)
 		} else {
-			rs = relaystore.NewWithRelayKey(cfg.PublishRemotes, sec)
+			rs = relaystore.NewWithRelayKey(cfg.PublishRemotes, decodedSec)
 		}
 	} else {
 		defaultRemote := "ws://localhost:10547"
-		rs = relaystore.NewWithRelayKey([]string{defaultRemote}, sec)
+		rs = relaystore.NewWithRelayKey([]string{defaultRemote}, decodedSec)
 	}
 	if cfg.Verbose {
 		rs.Verbose = true
