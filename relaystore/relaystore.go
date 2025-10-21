@@ -118,6 +118,9 @@ type RelayStore struct {
 	mirrorSuccesses           int64
 	mirrorFailures            int64
 	consecutiveMirrorFailures int64
+	// relay health tracking
+	liveRelays int64
+	deadRelays int64
 	// stats
 	publishAttempts     int64
 	publishSuccesses    int64
@@ -187,6 +190,9 @@ type Stats struct {
 	MirrorFailures            int64  `json:"mirror_failures"`
 	ConsecutiveMirrorFailures int64  `json:"consecutive_mirror_failures"`
 	MirrorHealthState         string `json:"mirror_health_state"`
+	// Relay health statistics
+	LiveRelays int64 `json:"live_relays"`
+	DeadRelays int64 `json:"dead_relays"`
 }
 
 // getHealthState determines the health state based on consecutive failures
@@ -286,6 +292,9 @@ func (r *RelayStore) Stats() Stats {
 		MirrorFailures:            atomic.LoadInt64(&r.mirrorFailures),
 		ConsecutiveMirrorFailures: consecutiveMirrorFailures,
 		MirrorHealthState:         mirrorHealthState,
+		// Relay health statistics
+		LiveRelays: atomic.LoadInt64(&r.liveRelays),
+		DeadRelays: atomic.LoadInt64(&r.deadRelays),
 	}
 }
 
@@ -933,8 +942,11 @@ func (r *RelayStore) mirrorFromRelays(ctx context.Context, relay *khatru.Relay) 
 	now := nostr.Now()
 	filter := nostr.Filter{Since: &now}
 
-	retryDelay := time.Second         // Start with 1 second delay
-	maxRetryDelay := 30 * time.Second // Max 30 seconds between retries
+	// subscribe to all query relays at once (handles deduplication)
+	sub := r.pool.SubMany(ctx, r.queryUrls, []nostr.Filter{filter})
+
+	// Start relay health monitoring goroutine
+	go r.monitorRelayHealth(ctx)
 
 	for {
 		select {
@@ -943,65 +955,84 @@ func (r *RelayStore) mirrorFromRelays(ctx context.Context, relay *khatru.Relay) 
 				log.Printf("[relaystore] mirror from query relays stopped (context cancelled)")
 			}
 			return
-		default:
-		}
-
-		// subscribe to all query relays at once (handles deduplication)
-		sub := r.pool.SubMany(ctx, r.queryUrls, []nostr.Filter{filter})
-
-		// Process events from the subscription
-		subscriptionActive := true
-		for subscriptionActive {
-			select {
-			case <-ctx.Done():
+		case relayEvent, ok := <-sub:
+			if !ok {
 				if r.Verbose {
-					log.Printf("[relaystore] mirror from query relays stopped (context cancelled)")
+					log.Printf("[relaystore] mirror subscription closed")
 				}
 				return
-			case relayEvent, ok := <-sub:
-				if !ok {
-					if r.Verbose {
-						log.Printf("[relaystore] mirror subscription closed, will retry in %v", retryDelay)
-					}
-					// Count this as a failure and increment consecutive failures
-					atomic.AddInt64(&r.mirrorFailures, 1)
-					atomic.AddInt64(&r.consecutiveMirrorFailures, 1)
-					subscriptionActive = false
-					break
-				}
+			}
 
-				if relayEvent.Event != nil {
-					// Track successful connection on first event received
-					if atomic.LoadInt64(&r.mirrorAttempts) == 0 || atomic.LoadInt64(&r.consecutiveMirrorFailures) > 0 {
-						atomic.AddInt64(&r.mirrorAttempts, 1)
-						atomic.StoreInt64(&r.consecutiveMirrorFailures, 0) // Reset on successful event reception
-					}
-
-					// broadcast the event to all connected clients
-					clientCount := relay.BroadcastEvent(relayEvent.Event)
-					atomic.AddInt64(&r.mirroredEvents, 1)
-					atomic.AddInt64(&r.mirrorSuccesses, 1)
-					if r.Verbose {
-						log.Printf("[relaystore] mirrored event %s from %s to %d clients", relayEvent.Event.ID, relayEvent.Relay, clientCount)
-					}
+			if relayEvent.Event != nil {
+				// broadcast the event to all connected clients
+				clientCount := relay.BroadcastEvent(relayEvent.Event)
+				atomic.AddInt64(&r.mirroredEvents, 1)
+				atomic.AddInt64(&r.mirrorSuccesses, 1)
+				if r.Verbose {
+					log.Printf("[relaystore] mirrored event %s from %s to %d clients", relayEvent.Event.ID, relayEvent.Relay, clientCount)
 				}
 			}
 		}
+	}
+}
 
-		// Wait before retrying with exponential backoff
-		if r.Verbose {
-			log.Printf("[relaystore] waiting %v before retrying mirror connection", retryDelay)
-		}
+// monitorRelayHealth periodically checks the health of all query relays
+func (r *RelayStore) monitorRelayHealth(ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Second) // Check every 30 seconds
+	defer ticker.Stop()
 
+	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(retryDelay):
-			// Increase retry delay for next attempt (exponential backoff)
-			retryDelay = time.Duration(float64(retryDelay) * 1.5)
-			if retryDelay > maxRetryDelay {
-				retryDelay = maxRetryDelay
+		case <-ticker.C:
+			r.checkRelayHealth()
+		}
+	}
+}
+
+// checkRelayHealth checks each relay and updates health counters
+func (r *RelayStore) checkRelayHealth() {
+	if len(r.queryUrls) == 0 {
+		return
+	}
+
+	liveCount := int64(0)
+	deadCount := int64(0)
+
+	for _, url := range r.queryUrls {
+		_, err := r.pool.EnsureRelay(url)
+		if err != nil {
+			deadCount++
+			if r.Verbose {
+				log.Printf("[relaystore] relay %s is dead: %v", url, err)
 			}
+		} else {
+			liveCount++
+		}
+	}
+
+	// Update counters
+	atomic.StoreInt64(&r.liveRelays, liveCount)
+	atomic.StoreInt64(&r.deadRelays, deadCount)
+
+	// Check if more than half are dead
+	totalRelays := int64(len(r.queryUrls))
+	deadThreshold := totalRelays / 2
+	liveThreshold := totalRelays / 2
+
+	if deadCount > deadThreshold {
+		// More than half are dead - count as failure
+		atomic.AddInt64(&r.mirrorFailures, 1)
+		atomic.AddInt64(&r.consecutiveMirrorFailures, 1)
+		if r.Verbose {
+			log.Printf("[relaystore] mirror health check failed: %d/%d relays dead", deadCount, totalRelays)
+		}
+	} else if liveCount > liveThreshold {
+		// More than half are alive - reset failures
+		atomic.StoreInt64(&r.consecutiveMirrorFailures, 0)
+		if r.Verbose {
+			log.Printf("[relaystore] mirror health check passed: %d/%d relays alive", liveCount, totalRelays)
 		}
 	}
 }
