@@ -997,7 +997,6 @@ func (r *RelayStore) checkRelayHealth() {
 		return
 	}
 
-	liveCount := int64(0)
 	deadCount := int64(0)
 
 	for _, url := range r.queryUrls {
@@ -1007,17 +1006,18 @@ func (r *RelayStore) checkRelayHealth() {
 			if r.Verbose {
 				log.Printf("[relaystore] relay %s is dead: %v", url, err)
 			}
-		} else {
-			liveCount++
 		}
 	}
+
+	// Calculate live count from total and dead
+	totalRelays := int64(len(r.queryUrls))
+	liveCount := totalRelays - deadCount
 
 	// Update counters
 	atomic.StoreInt64(&r.liveRelays, liveCount)
 	atomic.StoreInt64(&r.deadRelays, deadCount)
 
 	// Check if more than half are dead
-	totalRelays := int64(len(r.queryUrls))
 	threshold := totalRelays / 2
 
 	if deadCount >= threshold {
