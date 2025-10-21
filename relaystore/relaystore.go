@@ -966,7 +966,7 @@ func (r *RelayStore) mirrorFromRelays(ctx context.Context, relay *khatru.Relay) 
 	filter := nostr.Filter{Since: &now}
 
 	// subscribe to all query relays at once (handles deduplication)
-	sub := r.pool.SubMany(ctx, r.queryUrls, []nostr.Filter{filter})
+	sub := r.pool.SubscribeMany(ctx, r.queryUrls, filter)
 
 	// Start relay health monitoring goroutine
 	go r.monitorRelayHealth(ctx)
