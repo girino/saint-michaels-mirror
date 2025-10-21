@@ -59,23 +59,26 @@ func main() {
 		if strings.HasPrefix(sec, "nsec") {
 			if pfx, val, err := nip19.Decode(sec); err == nil && pfx == "nsec" {
 				if s, ok := val.(string); ok {
-					// s should be hex private key
-					// try hex decode to validate
-					if _, err := hex.DecodeString(s); err == nil {
-						decodedSec = s
-						// derive pubkey
-						if pk, err := nostr.GetPublicKey(s); err == nil {
-							if r.Info.PubKey == "" {
-								r.Info.PubKey = pk
-							}
+					// s should be hex private key - use it directly
+					decodedSec = s
+					if cfg.Verbose {
+						log.Printf("[main] decoded nsec to hex, length: %d", len(s))
+					}
+					// derive pubkey
+					if pk, err := nostr.GetPublicKey(s); err == nil {
+						if r.Info.PubKey == "" {
+							r.Info.PubKey = pk
 						}
 					}
 				}
 			}
 		} else {
-			// assume it's hex
+			// assume it's hex - validate it
 			if _, err := hex.DecodeString(sec); err == nil {
 				decodedSec = sec
+				if cfg.Verbose {
+					log.Printf("[main] using hex key directly, length: %d", len(sec))
+				}
 				if pk, err := nostr.GetPublicKey(sec); err == nil {
 					if r.Info.PubKey == "" {
 						r.Info.PubKey = pk
@@ -87,6 +90,9 @@ func main() {
 	}
 
 	// initialize relaystore with provided remotes or default
+	if cfg.Verbose {
+		log.Printf("[main] initializing RelayStore with decodedSec length: %d", len(decodedSec))
+	}
 	var rs *relaystore.RelayStore
 	if len(cfg.PublishRemotes) > 0 || len(cfg.QueryRemotes) > 0 {
 		if len(cfg.QueryRemotes) > 0 {
