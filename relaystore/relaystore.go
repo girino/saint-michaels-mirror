@@ -708,6 +708,11 @@ func (r *RelayStore) SaveEvent(ctx context.Context, evt *nostr.Event) error {
 						}
 
 						// Try to authenticate with the upstream relay
+						// Derive our relay's public key for logging
+						relayPubKey, _ := nostr.GetPublicKey(r.relaySecKey)
+						if r.Verbose {
+							log.Printf("[relaystore] authenticating with upstream relay using pubkey: %s", relayPubKey)
+						}
 						authErr := rl.Auth(cctx, func(event *nostr.Event) error {
 							return event.Sign(r.relaySecKey)
 						})
