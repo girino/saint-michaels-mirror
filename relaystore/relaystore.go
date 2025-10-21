@@ -693,13 +693,11 @@ func (r *RelayStore) SaveEvent(ctx context.Context, evt *nostr.Event) error {
 					// Check if the client is authenticated to our relay
 					clientPubKey := khatru.GetAuthed(ctx)
 					if clientPubKey == "" {
-						// Client is not authenticated - request authentication
+						// Client is not authenticated - just return the error without relay URL
 						if r.Verbose {
-							log.Printf("[relaystore] auth-required from %s, but client not authenticated - requesting client auth", u)
+							log.Printf("[relaystore] auth-required from %s, but client not authenticated - returning error", u)
 						}
-						khatru.RequestAuth(ctx)
-						// Return auth-required error to client
-						r.handleError(&errsMu, &errs, &prefixedErrs, u, fmt.Errorf("auth-required: authentication required"), "publish")
+						r.handleError(&errsMu, &errs, &prefixedErrs, "", fmt.Errorf("auth-required: authentication required"), "publish")
 						return
 					} else {
 						// Client is authenticated - use relay credentials for upstream authentication
