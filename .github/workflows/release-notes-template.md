@@ -1,8 +1,8 @@
 # Espelho de São Miguel - Release Notes
 
-## Version 1.0.0-rc2
+## Version {{VERSION}}
 
-**Release Date**: January 2025  
+**Release Date**: {{DATE}}  
 **License**: Girino's Anarchist License (GAL)  
 **Repository**: https://github.com/girino/saint-michaels-mirror
 
@@ -23,6 +23,12 @@ The name comes from a spiritual metaphor: the sacred mirror that stands between 
 - **Query Aggregation**: Queries multiple remote relays and merges results for clients
 - **Smart Routing**: Intelligent handling of internal vs. external queries
 - **NIP-45 Support**: Automatic detection and use of count endpoints when available
+
+### **Authentication & Mirroring (v1.1.0+)**
+- **Authentication Passthrough**: Automatically authenticates with upstream relays using configured relay key
+- **Event Mirroring**: Continuously mirrors events from query relays for comprehensive coverage
+- **Structured Error Handling**: Passes through machine-readable error prefixes from upstream relays
+- **Key Format Support**: Supports both raw hex and nsec bech32 encoded keys
 
 ### **Modern Web Interface**
 - **NIP-11 Compliance**: Standard relay information endpoint
@@ -61,6 +67,7 @@ The name comes from a spiritual metaphor: the sacred mirror that stands between 
 - **Memory Monitoring**: Runtime statistics including goroutines and memory usage
 - **Query Performance**: Separate timing for query and count operations
 - **Publish Performance**: Detailed forwarding statistics
+- **Mirroring Statistics**: Track mirrored events and coverage metrics
 
 ### **Web Interface Enhancements**
 - **API Versioning**: Organized API endpoints under `/api/v1/`
@@ -83,12 +90,12 @@ The name comes from a spiritual metaphor: the sacred mirror that stands between 
 ### **Docker Compose (Recommended)**
 ```bash
 # Download and extract the complete archive
-wget https://github.com/girino/saint-michaels-mirror/releases/download/v1.0.0-rc2/saint-michaels-mirror-v1.0.0-rc2-complete.tar.gz
-tar -xzf saint-michaels-mirror-v1.0.0-rc2-complete.tar.gz
-cd saint-michaels-mirror-v1.0.0-rc2
+wget https://github.com/girino/saint-michaels-mirror/releases/download/{{VERSION}}/saint-michaels-mirror-{{VERSION}}-complete.tar.gz
+tar -xzf saint-michaels-mirror-{{VERSION}}-complete.tar.gz
+cd saint-michaels-mirror-{{VERSION}}
 
 # Configure and deploy
-cp .env.example .env
+cp example.env .env
 # Edit .env with your configuration
 docker compose -f docker-compose.prod.yml up -d
 ```
@@ -96,11 +103,11 @@ docker compose -f docker-compose.prod.yml up -d
 ### **Standalone Binary**
 ```bash
 # Extract the archive
-tar -xzf saint-michaels-mirror-v1.0.0-rc2-complete.tar.gz
-cd saint-michaels-mirror-v1.0.0-rc2
+tar -xzf saint-michaels-mirror-{{VERSION}}-complete.tar.gz
+cd saint-michaels-mirror-{{VERSION}}
 
 # Configure
-cp .env.example .env
+cp example.env .env
 # Edit .env with your settings
 
 # Run the appropriate binary for your platform
@@ -122,7 +129,7 @@ docker run -d \
   --name saint-michaels-mirror \
   -p 3337:3337 \
   -e RELAY_NAME="Your Relay Name" \
-  ghcr.io/girino/saint-michaels-mirror:v1.0.0-rc2
+  ghcr.io/girino/saint-michaels-mirror:{{VERSION}}
 ```
 
 ---
@@ -140,6 +147,7 @@ docker run -d \
 - `RELAY_SERVICE_URL`: Public URL of your relay
 - `RELAY_ICON`: Path to relay icon
 - `RELAY_BANNER`: Path to relay banner
+- `RELAY_SECKEY`: Relay secret key (hex or nsec) for authentication
 - `ADDR`: Address to listen on (default: :3337)
 - `VERBOSE`: Enable verbose logging (1 to enable)
 - `PROD_IMAGE`: Docker image to use (defaults to latest if not set)
@@ -157,6 +165,7 @@ docker run -d \
 - Real-time performance metrics
 - Operation counters and timing statistics
 - Memory usage and goroutine counts
+- Mirrored events counter
 - Auto-refreshes every 10 seconds
 
 ### **Health Page (`/health`)**
@@ -187,6 +196,7 @@ The relay provides comprehensive health monitoring:
 - Memory usage (heap, stack, garbage collection)
 - Goroutine counts and system resources
 - Remote relay connectivity status
+- Mirrored events counter
 
 ### **Logging**
 - Configurable verbosity levels
@@ -220,6 +230,7 @@ The relay provides comprehensive health monitoring:
 - Connection pooling for remote relays
 - Atomic operations for thread-safe metrics
 - Optimized memory usage and garbage collection
+- Event mirroring with deduplication
 
 ### **Scalability**
 - Multi-architecture support
@@ -236,12 +247,14 @@ The relay provides comprehensive health monitoring:
 - Resolved health check endpoint issues
 - Corrected timing measurements for async operations
 - Fixed template inheritance and asset loading
+- Enhanced authentication with nsec key support
 
 ### **Improvements**
 - Enhanced error handling and recovery
 - Improved logging and debugging capabilities
 - Better resource management and cleanup
 - Optimized CI/CD pipeline performance
+- Structured error handling with NIP-01 prefixes
 
 ---
 
