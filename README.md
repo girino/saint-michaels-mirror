@@ -111,6 +111,7 @@ COMPOSE_RELAY_PORT=3337
 | `RELAY_SERVICE_URL` | ❌ | Public URL of your relay | - |
 | `RELAY_ICON` | ❌ | Path to relay icon | - |
 | `RELAY_BANNER` | ❌ | Path to relay banner | - |
+| `RELAY_SECKEY` | ❌ | Relay secret key (hex or nsec) for authentication | - |
 | `ADDR` | ❌ | Address to listen on | `:3337` |
 | `VERBOSE` | ❌ | Enable verbose logging (1/0) | `0` |
 | `PROD_IMAGE` | ❌ | Docker image for compose | `latest` |
@@ -120,11 +121,25 @@ COMPOSE_RELAY_PORT=3337
 ### Authentication Passthrough
 The relay automatically authenticates with upstream relays when required using the configured `RELAY_SECKEY`. This enables seamless operation with relays that require authentication for publishing events.
 
+**Supported Key Formats:**
+- **Raw Hex**: `a1b2c3d4e5f6...` (64-character hex string)
+- **nsec Bech32**: `nsec1abc123...` (bech32 encoded secret key)
+
+The relay automatically detects and decodes nsec keys to hex format for authentication, ensuring compatibility with both formats.
+
 ### Event Mirroring
-The relay continuously mirrors events from query relays using a "since now" filter, providing comprehensive event coverage. Mirrored events are injected into the local relay and counted in statistics.
+The relay continuously mirrors events from query relays using a "since now" filter, providing comprehensive event coverage. Mirrored events are injected into the local relay via `khatru.BroadcastEvent()` and counted in statistics.
+
+**Mirroring Benefits:**
+- **Complete Coverage**: Ensures all events from query relays are available locally
+- **Real-time Updates**: Events are mirrored immediately as they arrive
+- **Deduplication**: Automatic deduplication prevents duplicate events
+- **Statistics Tracking**: Mirroring activity is tracked in the stats endpoint
 
 ### Structured Error Handling
-When all publish attempts fail, the relay returns machine-readable error prefixes from upstream relays (NIP-01 standard), including: `duplicate`, `pow`, `blocked`, `rate-limited`, `invalid`, `restricted`, `mute`, and `error`.
+When all publish attempts fail, the relay returns machine-readable error prefixes from upstream relays (NIP-01 standard), including: `duplicate`, `pow`, `blocked`, `rate-limited`, `invalid`, `restricted`, `mute`, `error`, and `auth-required`.
+
+**Error Format**: `prefix: message (relay-url)` - includes the source relay URL for context.
 
 ## 🌐 Web Interface
 

@@ -2,12 +2,13 @@
 
 Instruction for AI agents editing this file: prioritize human-friendly, user-facing functionality; de-emphasize CI/CD and infrastructure-only changes.
 
-## v1.1.0 — 2025-01-XX
-- **Authentication passthrough**: Relay now authenticates with upstream relays using the configured `RELAY_SECKEY` when required.
-- **Structured error handling**: Machine-readable error prefixes from upstream relays (NIP-01) are now passed through to clients when all publish attempts fail.
-- **Continuous event mirroring**: Relay automatically mirrors events from query relays using a "since now" filter, injecting them into the local relay via `khatru.AddEvent()`.
-- **Enhanced NIP support**: Added NIP-42 (Authentication) to supported NIPs list.
-- **Improved statistics**: Added `mirrored_events` counter to stats endpoint to track mirroring activity.
+## v1.1.0 — 2025-01-21
+- **Authentication passthrough**: Relay now automatically authenticates with upstream relays using the configured `RELAY_SECKEY` when required, supporting both raw hex and nsec bech32 formats.
+- **Structured error handling**: Machine-readable error prefixes from upstream relays (NIP-01) are now passed through to clients when all publish attempts fail, including relay URLs for context.
+- **Continuous event mirroring**: Relay automatically mirrors events from query relays using a "since now" filter, injecting them into the local relay via `khatru.BroadcastEvent()` for comprehensive event coverage.
+- **Enhanced NIP support**: Added NIP-42 (Authentication) to supported NIPs list for seamless upstream relay authentication.
+- **Improved statistics**: Added `mirrored_events` counter to stats endpoint to track mirroring activity and provide visibility into event coverage.
+- **Key format support**: Enhanced `RELAY_SECKEY` handling to support both raw hex keys and nsec bech32 encoded keys for maximum compatibility.
 
 ## v1.0.0-rc4 — 2025-10-20
 - Preparations for launch and documentation improvements (no functional changes).
