@@ -942,8 +942,8 @@ func (r *RelayStore) mirrorFromRelays(ctx context.Context, relay *khatru.Relay) 
 	now := nostr.Now()
 	filter := nostr.Filter{Since: &now}
 
-	// subscribe to all query relays at once (handles deduplication)
-	sub := r.pool.SubMany(ctx, r.queryUrls, []nostr.Filter{filter})
+	retryDelay := time.Second         // Start with 1 second delay
+	maxRetryDelay := 30 * time.Second // Max 30 seconds between retries
 
 	// Start relay health monitoring goroutine
 	go r.monitorRelayHealth(ctx)
@@ -955,14 +955,41 @@ func (r *RelayStore) mirrorFromRelays(ctx context.Context, relay *khatru.Relay) 
 				log.Printf("[relaystore] mirror from query relays stopped (context cancelled)")
 			}
 			return
+		default:
+		}
+
+		// subscribe to all query relays at once (handles deduplication)
+		sub := r.pool.SubMany(ctx, r.queryUrls, []nostr.Filter{filter})
+
+		// Check if subscription is immediately closed (connection failure)
+		select {
+		case <-ctx.Done():
+			return
 		case relayEvent, ok := <-sub:
 			if !ok {
+				// Subscription closed immediately - connection failed
 				if r.Verbose {
-					log.Printf("[relaystore] mirror subscription closed")
+					log.Printf("[relaystore] mirror subscription failed to connect, retrying in %v", retryDelay)
 				}
-				return
+				// Count this as a failure
+				atomic.AddInt64(&r.mirrorFailures, 1)
+				atomic.AddInt64(&r.consecutiveMirrorFailures, 1)
+
+				// Wait before retrying with exponential backoff
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(retryDelay):
+					// Increase retry delay for next attempt
+					retryDelay = time.Duration(float64(retryDelay) * 1.5)
+					if retryDelay > maxRetryDelay {
+						retryDelay = maxRetryDelay
+					}
+				}
+				continue // Retry the connection
 			}
 
+			// Connection successful, process events
 			if relayEvent.Event != nil {
 				// broadcast the event to all connected clients
 				clientCount := relay.BroadcastEvent(relayEvent.Event)
@@ -971,6 +998,47 @@ func (r *RelayStore) mirrorFromRelays(ctx context.Context, relay *khatru.Relay) 
 				if r.Verbose {
 					log.Printf("[relaystore] mirrored event %s from %s to %d clients", relayEvent.Event.ID, relayEvent.Relay, clientCount)
 				}
+			}
+		}
+
+		// Process remaining events from the subscription
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case relayEvent, ok := <-sub:
+				if !ok {
+					// Subscription closed during operation
+					if r.Verbose {
+						log.Printf("[relaystore] mirror subscription closed during operation, retrying in %v", retryDelay)
+					}
+					// Count this as a failure
+					atomic.AddInt64(&r.mirrorFailures, 1)
+					atomic.AddInt64(&r.consecutiveMirrorFailures, 1)
+					break // Exit inner loop to retry connection
+				}
+
+				if relayEvent.Event != nil {
+					// broadcast the event to all connected clients
+					clientCount := relay.BroadcastEvent(relayEvent.Event)
+					atomic.AddInt64(&r.mirroredEvents, 1)
+					atomic.AddInt64(&r.mirrorSuccesses, 1)
+					if r.Verbose {
+						log.Printf("[relaystore] mirrored event %s from %s to %d clients", relayEvent.Event.ID, relayEvent.Relay, clientCount)
+					}
+				}
+			}
+		}
+
+		// Wait before retrying with exponential backoff
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(retryDelay):
+			// Increase retry delay for next attempt
+			retryDelay = time.Duration(float64(retryDelay) * 1.5)
+			if retryDelay > maxRetryDelay {
+				retryDelay = maxRetryDelay
 			}
 		}
 	}
