@@ -92,6 +92,13 @@ func main() {
 	// initialize relaystore with provided remotes or default
 	if cfg.Verbose {
 		log.Printf("[main] initializing RelayStore with decodedSec length: %d", len(decodedSec))
+		if decodedSec != "" {
+			prefixLen := 8
+			if len(decodedSec) < prefixLen {
+				prefixLen = len(decodedSec)
+			}
+			log.Printf("[main] decodedSec starts with: %s", decodedSec[:prefixLen])
+		}
 	}
 	var rs *relaystore.RelayStore
 	if len(cfg.PublishRemotes) > 0 || len(cfg.QueryRemotes) > 0 {
