@@ -911,7 +911,11 @@ func (r *RelayStore) StartMirroring(relay *khatru.Relay) error {
 	}
 
 	if len(r.queryUrls) == 0 {
-		return fmt.Errorf("no query relays configured")
+		// No query relays configured - this is OK, relay can work without mirroring
+		if r.Verbose {
+			log.Printf("[relaystore] no query relays configured, skipping mirroring")
+		}
+		return nil
 	}
 
 	// Check connectivity to all query relays first
@@ -928,7 +932,8 @@ func (r *RelayStore) StartMirroring(relay *khatru.Relay) error {
 	}
 
 	if liveCount == 0 {
-		return fmt.Errorf("no query relays are available")
+		// Query relays are configured but none are available - this is a fatal error
+		return fmt.Errorf("no query relays are available (configured: %d)", len(r.queryUrls))
 	}
 
 	if r.Verbose {
