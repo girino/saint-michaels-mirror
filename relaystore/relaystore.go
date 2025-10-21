@@ -1020,7 +1020,7 @@ func (r *RelayStore) checkRelayHealth() {
 	// Check if more than half are dead
 	threshold := totalRelays / 2
 
-	if deadCount >= threshold {
+	if deadCount > threshold {
 		// More than half are dead - count as failure
 		atomic.AddInt64(&r.mirrorFailures, 1)
 		atomic.AddInt64(&r.consecutiveMirrorFailures, 1)
@@ -1028,7 +1028,7 @@ func (r *RelayStore) checkRelayHealth() {
 			log.Printf("[relaystore] mirror health check failed: %d/%d relays dead", deadCount, totalRelays)
 		}
 	} else {
-		// Less than half are dead (more than half are alive) - reset failures
+		// Half or less are dead (more than half are alive) - reset failures
 		atomic.StoreInt64(&r.consecutiveMirrorFailures, 0)
 		if r.Verbose {
 			log.Printf("[relaystore] mirror health check passed: %d/%d relays alive", liveCount, totalRelays)
