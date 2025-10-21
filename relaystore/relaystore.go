@@ -197,7 +197,7 @@ type Stats struct {
 
 // getHealthState determines the health state based on consecutive failures
 func getHealthState(consecutiveFailures int64) string {
-	if consecutiveFailures == 0 {
+	if consecutiveFailures <= 2 {
 		return HealthGreen
 	} else if consecutiveFailures < 10 {
 		return HealthYellow
