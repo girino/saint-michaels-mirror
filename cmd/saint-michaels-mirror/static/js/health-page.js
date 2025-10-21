@@ -103,9 +103,23 @@ async function loadHealth() {
   try {
     showLoading();
     const response = await fetch('/api/v1/health');
-    if (!response.ok) throw new Error('Failed to fetch health status');
-    const data = await response.json();
     
+    if (!response.ok) {
+      // Try to parse error response as JSON
+      try {
+        const errorData = await response.json();
+        // If we can parse the response, show the health data even if status is not OK
+        populateHealth(errorData);
+        showHealth();
+        updateLastUpdated();
+        return;
+      } catch (parseError) {
+        // If we can't parse the response, it's a real network/server error
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+    }
+    
+    const data = await response.json();
     populateHealth(data);
     showHealth();
     updateLastUpdated();
