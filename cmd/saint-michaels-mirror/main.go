@@ -163,7 +163,10 @@ func main() {
 	r.CountEvents = append(r.CountEvents, rs.CountEvents)
 
 	// start event mirroring from query relays
-	rs.StartMirroring(r)
+	if err := rs.StartMirroring(r); err != nil {
+		log.Printf("[relaystore] failed to start mirroring: %v", err)
+		// Continue without mirroring - relay can still work for publishing
+	}
 	defer rs.StopMirroring()
 
 	// expose stats endpoint using the relay's router

@@ -904,20 +904,43 @@ func isAddingKind5Filter(f nostr.Filter) bool {
 }
 
 // StartMirroring begins continuous mirroring of events from query relays to the khatru relay
-func (r *RelayStore) StartMirroring(relay *khatru.Relay) {
+func (r *RelayStore) StartMirroring(relay *khatru.Relay) error {
 	if r.mirrorCtx != nil {
 		// already started
-		return
+		return nil
+	}
+
+	if len(r.queryUrls) == 0 {
+		return fmt.Errorf("no query relays configured")
+	}
+
+	// Check connectivity to all query relays first
+	liveCount := 0
+	for _, url := range r.queryUrls {
+		_, err := r.pool.EnsureRelay(url)
+		if err != nil {
+			if r.Verbose {
+				log.Printf("[relaystore] failed initial connect to %s: %v", url, err)
+			}
+		} else {
+			liveCount++
+		}
+	}
+
+	if liveCount == 0 {
+		return fmt.Errorf("no query relays are available")
+	}
+
+	if r.Verbose {
+		log.Printf("[relaystore] starting event mirroring from %d query relays (%d/%d available)", len(r.queryUrls), liveCount, len(r.queryUrls))
 	}
 
 	r.mirrorCtx, r.mirrorCancel = context.WithCancel(context.Background())
 
-	if r.Verbose {
-		log.Printf("[relaystore] starting event mirroring from %d query relays", len(r.queryUrls))
-	}
-
 	// start single mirroring goroutine for all query relays
 	go r.mirrorFromRelays(r.mirrorCtx, relay)
+
+	return nil
 }
 
 // StopMirroring stops the continuous mirroring of events
