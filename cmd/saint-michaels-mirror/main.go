@@ -245,8 +245,10 @@ func main() {
 			"main_health_state":            relayStats.MainHealthState,
 			"publish_health_state":         relayStats.PublishHealthState,
 			"query_health_state":           relayStats.QueryHealthState,
+			"mirror_health_state":          relayStats.MirrorHealthState,
 			"consecutive_publish_failures": relayStats.ConsecutivePublishFailures,
 			"consecutive_query_failures":   relayStats.ConsecutiveQueryFailures,
+			"consecutive_mirror_failures":  relayStats.ConsecutiveMirrorFailures,
 		}
 
 		w.WriteHeader(httpStatus)
