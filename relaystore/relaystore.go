@@ -32,7 +32,69 @@ const (
 	HealthRed    = "RED"
 )
 
-// RelayStore forwards events to a set of remote nostr relays. It does not persist events locally.
+// PrefixedError represents an error with a machine-readable prefix from NIP-01
+type PrefixedError struct {
+	Prefix   string
+	Message  string
+	RelayURL string
+}
+
+func (e PrefixedError) Error() string {
+	if e.Prefix != "" {
+		if e.RelayURL != "" {
+			return e.Prefix + ": " + e.Message + " (" + e.RelayURL + ")"
+		}
+		return e.Prefix + ": " + e.Message
+	}
+	return e.Message
+}
+
+// parseErrorPrefix extracts the machine-readable prefix from a relay error message
+// NIP-01 standardized prefixes: duplicate, pow, blocked, rate-limited, invalid, restricted, mute, error, auth-required
+func parseErrorPrefix(err error) (prefix, message string) {
+	if err == nil {
+		return "", ""
+	}
+
+	errStr := err.Error()
+
+	// Remove "msg: " prefix that Publish() always adds
+	errStr = strings.TrimPrefix(errStr, "msg: ")
+
+	// Look for pattern "prefix: message" where prefix is before the first colon
+	if colonIdx := strings.Index(errStr, ": "); colonIdx > 0 {
+		prefix = strings.TrimSpace(errStr[:colonIdx])
+		message = strings.TrimSpace(errStr[colonIdx+2:])
+
+		// Validate that the prefix is one of the standardized NIP-01 prefixes
+		validPrefixes := []string{"duplicate", "pow", "blocked", "rate-limited", "invalid", "restricted", "mute", "error", "auth-required"}
+		for _, validPrefix := range validPrefixes {
+			if prefix == validPrefix {
+				return prefix, message
+			}
+		}
+	}
+
+	// If no valid prefix found, return the whole error as message
+	return "", errStr
+}
+
+// handleError handles error collection, logging, and counting
+func (r *RelayStore) handleError(errsMu *sync.Mutex, errs *[]error, prefixedErrs *[]PrefixedError, url string, err error, context string) {
+	errsMu.Lock()
+	*errs = append(*errs, fmt.Errorf("%s: %w", url, err))
+	// parse error prefix for structured error handling
+	if prefix, msg := parseErrorPrefix(err); prefix != "" {
+		*prefixedErrs = append(*prefixedErrs, PrefixedError{Prefix: prefix, Message: msg, RelayURL: url})
+	}
+	errsMu.Unlock()
+	// count failure
+	atomic.AddInt64(&r.publishFailures, 1)
+	if r.Verbose {
+		log.Printf("[relaystore][WARN] %s to %s failed: %v", context, url, err)
+	}
+}
+
 type RelayStore struct {
 	urls   []string
 	relays map[string]*nostr.Relay
@@ -45,6 +107,12 @@ type RelayStore struct {
 	publishTimeout time.Duration
 	// verbose enables debug logging
 	Verbose bool
+	// relaySecKey is the private key used for authenticating to upstream relays
+	relaySecKey string
+	// mirroring state
+	mirrorCtx      context.Context
+	mirrorCancel   context.CancelFunc
+	mirroredEvents int64
 	// stats
 	publishAttempts     int64
 	publishSuccesses    int64
@@ -107,6 +175,8 @@ type Stats struct {
 	TotalPublishDurationMs   int64   `json:"total_publish_duration_ms"`
 	TotalQueryDurationMs     int64   `json:"total_query_duration_ms"`
 	TotalCountDurationMs     int64   `json:"total_count_duration_ms"`
+	// Mirroring statistics
+	MirroredEvents int64 `json:"mirrored_events"`
 }
 
 // getHealthState determines the health state based on consecutive failures
@@ -197,28 +267,42 @@ func (r *RelayStore) Stats() Stats {
 		TotalPublishDurationMs:   totalPublishDurationNs / 1e6, // Convert ns to ms
 		TotalQueryDurationMs:     totalQueryDurationNs / 1e6,   // Convert ns to ms
 		TotalCountDurationMs:     totalCountDurationNs / 1e6,   // Convert ns to ms
+		// Mirroring statistics
+		MirroredEvents: atomic.LoadInt64(&r.mirroredEvents),
 	}
 }
 
 // New creates a RelayStore that will forward to the provided comma-separated URLs.
 func New(urls []string) *RelayStore {
+	return NewWithRelayKey(urls, "")
+}
+
+// NewWithRelayKey creates a RelayStore that will forward to the provided URLs with optional relay authentication key.
+func NewWithRelayKey(urls []string, relaySecKey string) *RelayStore {
 	rs := &RelayStore{
 		urls:                   urls,
 		relays:                 make(map[string]*nostr.Relay),
 		publishTimeout:         7 * time.Second,
 		maxConsecutiveFailures: 10, // Default threshold: 10 consecutive failures
+		relaySecKey:            relaySecKey,
 	}
 	return rs
 }
 
 // NewWithQueryRemotes creates a RelayStore with separate publish remotes and query remotes.
 func NewWithQueryRemotes(publish []string, query []string) *RelayStore {
+	return NewWithQueryRemotesAndRelayKey(publish, query, "")
+}
+
+// NewWithQueryRemotesAndRelayKey creates a RelayStore with separate publish remotes and query remotes, with optional relay authentication key.
+func NewWithQueryRemotesAndRelayKey(publish []string, query []string, relaySecKey string) *RelayStore {
 	rs := &RelayStore{
 		urls:                   publish,
 		queryUrls:              query,
 		relays:                 make(map[string]*nostr.Relay),
 		publishTimeout:         7 * time.Second,
 		maxConsecutiveFailures: 10, // Default threshold: 10 consecutive failures
+		relaySecKey:            relaySecKey,
 	}
 	return rs
 }
@@ -395,6 +479,26 @@ func (r *RelayStore) ensureRelay(ctx context.Context, url string) (*nostr.Relay,
 		}
 		return nil, err
 	}
+
+	// attempt authentication if we have a relay secret key
+	if r.relaySecKey != "" {
+		if r.Verbose {
+			log.Printf("[relaystore] attempting authentication to %s", url)
+		}
+		err = newrl.Auth(ctx, func(event *nostr.Event) error {
+			// sign the AUTH event with our relay secret key
+			return event.Sign(r.relaySecKey)
+		})
+		if err != nil {
+			if r.Verbose {
+				log.Printf("[relaystore][WARN] authentication to %s failed: %v", url, err)
+			}
+			// continue without authentication - some relays don't require it
+		} else if r.Verbose {
+			log.Printf("[relaystore] authenticated to %s", url)
+		}
+	}
+
 	r.mu.Lock()
 	r.relays[url] = newrl
 	r.mu.Unlock()
@@ -536,6 +640,7 @@ func (r *RelayStore) SaveEvent(ctx context.Context, evt *nostr.Event) error {
 	var wg sync.WaitGroup
 	errsMu := sync.Mutex{}
 	var errs []error
+	var prefixedErrs []PrefixedError
 
 	// if no remotes configured, simply return nil (nothing to do)
 	if len(r.urls) == 0 {
@@ -576,14 +681,43 @@ func (r *RelayStore) SaveEvent(ctx context.Context, evt *nostr.Event) error {
 			}
 
 			if err := rl.Publish(cctx, *evt); err != nil {
-				errsMu.Lock()
-				errs = append(errs, fmt.Errorf("%s: %w", u, err))
-				errsMu.Unlock()
-				// count failure
-				atomic.AddInt64(&r.publishFailures, 1)
-				if r.Verbose {
-					log.Printf("[relaystore][WARN] publish to %s failed: %v", u, err)
+				// Check if this is an auth-required error and we have a relay key
+				if prefix, _ := parseErrorPrefix(err); prefix == "auth-required" && r.relaySecKey != "" {
+					if r.Verbose {
+						log.Printf("[relaystore] auth-required from %s, attempting authentication", u)
+					}
+
+					// Try to authenticate with the relay
+					authErr := rl.Auth(cctx, func(event *nostr.Event) error {
+						return event.Sign(r.relaySecKey)
+					})
+
+					if authErr != nil {
+						if r.Verbose {
+							log.Printf("[relaystore][WARN] authentication to %s failed: %v", u, authErr)
+						}
+						// Continue with normal error handling
+					} else {
+						if r.Verbose {
+							log.Printf("[relaystore] authenticated to %s, retrying publish", u)
+						}
+
+						// Retry the publish after authentication
+						if retryErr := rl.Publish(cctx, *evt); retryErr != nil {
+							r.handleError(&errsMu, &errs, &prefixedErrs, u, retryErr, "retry publish")
+							return
+						}
+
+						// Success after authentication
+						atomic.AddInt64(&r.publishSuccesses, 1)
+						if r.Verbose {
+							log.Printf("[relaystore][DEBUG] publish to %s succeeded after authentication for event %s", u, evt.ID)
+						}
+						return
+					}
 				}
+
+				r.handleError(&errsMu, &errs, &prefixedErrs, u, err, "publish")
 				return
 			}
 			// count success
@@ -606,7 +740,12 @@ func (r *RelayStore) SaveEvent(ctx context.Context, evt *nostr.Event) error {
 	// Failure: increment consecutive failure counter
 	atomic.AddInt64(&r.consecutivePublishFailures, 1)
 
-	// if all remotes failed, return aggregated error
+	// if all remotes failed, return the first prefixed error if available, otherwise aggregated error
+	if len(prefixedErrs) > 0 {
+		return prefixedErrs[0]
+	}
+
+	// if no prefixed errors, return aggregated error
 	return errors.New(strings.Join(func() []string {
 		ss := make([]string, len(errs))
 		for i, e := range errs {
@@ -724,4 +863,73 @@ func isAddingKind5Filter(f nostr.Filter) bool {
 		return len(vs) == 1 && len(f.Authors) == 0 && f.Since == nil && f.Until == nil && len(f.IDs) == 0
 	}
 	return false
+}
+
+// StartMirroring begins continuous mirroring of events from query relays to the khatru relay
+func (r *RelayStore) StartMirroring(relay *khatru.Relay) {
+	if r.mirrorCtx != nil {
+		// already started
+		return
+	}
+
+	r.mirrorCtx, r.mirrorCancel = context.WithCancel(context.Background())
+
+	if r.Verbose {
+		log.Printf("[relaystore] starting event mirroring from %d query relays", len(r.queryUrls))
+	}
+
+	// start single mirroring goroutine for all query relays
+	go r.mirrorFromRelays(r.mirrorCtx, relay)
+}
+
+// StopMirroring stops the continuous mirroring of events
+func (r *RelayStore) StopMirroring() {
+	if r.mirrorCancel != nil {
+		if r.Verbose {
+			log.Printf("[relaystore] stopping event mirroring")
+		}
+		r.mirrorCancel()
+		r.mirrorCtx = nil
+		r.mirrorCancel = nil
+	}
+}
+
+// mirrorFromRelays continuously mirrors events from all query relays
+func (r *RelayStore) mirrorFromRelays(ctx context.Context, relay *khatru.Relay) {
+	if r.Verbose {
+		log.Printf("[relaystore] starting mirror from %d query relays: %v", len(r.queryUrls), r.queryUrls)
+	}
+
+	// create a filter that gets all events since now
+	now := nostr.Now()
+	filter := nostr.Filter{Since: &now}
+
+	// subscribe to all query relays at once (handles deduplication)
+	sub := r.pool.SubMany(ctx, r.queryUrls, []nostr.Filter{filter})
+
+	for {
+		select {
+		case <-ctx.Done():
+			if r.Verbose {
+				log.Printf("[relaystore] mirror from query relays stopped (context cancelled)")
+			}
+			return
+		case relayEvent, ok := <-sub:
+			if !ok {
+				if r.Verbose {
+					log.Printf("[relaystore] mirror subscription closed")
+				}
+				return
+			}
+
+			if relayEvent.Event != nil {
+				// broadcast the event to all connected clients
+				clientCount := relay.BroadcastEvent(relayEvent.Event)
+				atomic.AddInt64(&r.mirroredEvents, 1)
+				if r.Verbose {
+					log.Printf("[relaystore] mirrored event %s from %s to %d clients", relayEvent.Event.ID, relayEvent.Relay, clientCount)
+				}
+			}
+		}
+	}
 }

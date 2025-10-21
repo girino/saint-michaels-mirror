@@ -14,6 +14,9 @@
 
 - **🔄 Event Aggregation**: Forwards published events to multiple remote relays
 - **🔍 Query Unification**: Queries multiple relays and merges results for clients
+- **🔐 Authentication Passthrough**: Automatically authenticates with upstream relays using configured relay key
+- **📡 Event Mirroring**: Continuously mirrors events from query relays to provide comprehensive event coverage
+- **⚠️ Structured Error Handling**: Passes through machine-readable error prefixes from upstream relays
 - **📊 Real-time Monitoring**: Live statistics and health monitoring dashboard
 - **🐳 Docker Ready**: Complete Docker Compose setup for easy deployment
 - **🌐 Web Interface**: Modern, responsive web interface with NIP-11 compliance
@@ -88,6 +91,9 @@ RELAY_BANNER=static/banner.png
 ADDR=:3337
 VERBOSE=0
 
+# Optional: Authentication (for upstream relays)
+RELAY_SECKEY=nsec1your-relay-secret-key-here
+
 # Optional: Docker settings
 PROD_IMAGE=ghcr.io/girino/saint-michaels-mirror:latest
 COMPOSE_RELAY_PORT=3337
@@ -108,6 +114,17 @@ COMPOSE_RELAY_PORT=3337
 | `ADDR` | ❌ | Address to listen on | `:3337` |
 | `VERBOSE` | ❌ | Enable verbose logging (1/0) | `0` |
 | `PROD_IMAGE` | ❌ | Docker image for compose | `latest` |
+
+## 🔐 Authentication & Mirroring Features
+
+### Authentication Passthrough
+The relay automatically authenticates with upstream relays when required using the configured `RELAY_SECKEY`. This enables seamless operation with relays that require authentication for publishing events.
+
+### Event Mirroring
+The relay continuously mirrors events from query relays using a "since now" filter, providing comprehensive event coverage. Mirrored events are injected into the local relay and counted in statistics.
+
+### Structured Error Handling
+When all publish attempts fail, the relay returns machine-readable error prefixes from upstream relays (NIP-01 standard), including: `duplicate`, `pow`, `blocked`, `rate-limited`, `invalid`, `restricted`, `mute`, and `error`.
 
 ## 🌐 Web Interface
 

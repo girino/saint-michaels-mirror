@@ -33,25 +33,6 @@ func main() {
 	// use LoadConfig to read env/flags
 	cfg := LoadConfig()
 
-	// initialize relaystore with provided remotes or default
-	var rs *relaystore.RelayStore
-	if len(cfg.PublishRemotes) > 0 || len(cfg.QueryRemotes) > 0 {
-		if len(cfg.QueryRemotes) > 0 {
-			rs = relaystore.NewWithQueryRemotes(cfg.PublishRemotes, cfg.QueryRemotes)
-		} else {
-			rs = relaystore.New(cfg.PublishRemotes)
-		}
-	} else {
-		defaultRemote := "ws://localhost:10547"
-		rs = relaystore.New([]string{defaultRemote})
-	}
-	if cfg.Verbose {
-		rs.Verbose = true
-	}
-	if err := rs.Init(); err != nil {
-		log.Fatalf("initializing relaystore: %v", err)
-	}
-
 	// create a basic khatru relay instance
 	r := khatru.NewRelay()
 
@@ -100,6 +81,25 @@ func main() {
 		// do not log secrets
 	}
 
+	// initialize relaystore with provided remotes or default
+	var rs *relaystore.RelayStore
+	if len(cfg.PublishRemotes) > 0 || len(cfg.QueryRemotes) > 0 {
+		if len(cfg.QueryRemotes) > 0 {
+			rs = relaystore.NewWithQueryRemotesAndRelayKey(cfg.PublishRemotes, cfg.QueryRemotes, sec)
+		} else {
+			rs = relaystore.NewWithRelayKey(cfg.PublishRemotes, sec)
+		}
+	} else {
+		defaultRemote := "ws://localhost:10547"
+		rs = relaystore.NewWithRelayKey([]string{defaultRemote}, sec)
+	}
+	if cfg.Verbose {
+		rs.Verbose = true
+	}
+	if err := rs.Init(); err != nil {
+		log.Fatalf("initializing relaystore: %v", err)
+	}
+
 	// Ensure some canonical NIP-11 fields are set on the relay Info. ApplyToRelay
 	// sets most fields from config; here we only set safe defaults when empty
 	// and make sure SupportedNIPs includes 11 so khatru will serve NIP-11.
@@ -112,8 +112,8 @@ func main() {
 	if r.Info.Version == "" {
 		r.Info.Version = Version
 	}
-	// ensure SupportedNIPs contains 11 and 45 (we add 45 in case a store/feature needs it)
-	ensureSupportedNips(r, []int{11, 45})
+	// ensure SupportedNIPs contains 11, 42, and 45 (we add 45 in case a store/feature needs it)
+	ensureSupportedNips(r, []int{11, 42, 45})
 
 	// populate other NIP-11 fields from config if provided (explicitly override)
 	if cfg.RelayName != "" {
@@ -159,6 +159,10 @@ func main() {
 	r.StoreEvent = append(r.StoreEvent, rs.SaveEvent)
 	r.QueryEvents = append(r.QueryEvents, rs.QueryEvents)
 	r.CountEvents = append(r.CountEvents, rs.CountEvents)
+
+	// start event mirroring from query relays
+	rs.StartMirroring(r)
+	defer rs.StopMirroring()
 
 	// expose stats endpoint using the relay's router
 	mux := r.Router()
