@@ -164,8 +164,7 @@ func main() {
 
 	// start event mirroring from query relays
 	if err := rs.StartMirroring(r); err != nil {
-		log.Printf("[relaystore] failed to start mirroring: %v", err)
-		// Continue without mirroring - relay can still work for publishing
+		log.Fatalf("[relaystore] failed to start mirroring: %v", err)
 	}
 	defer rs.StopMirroring()
 
