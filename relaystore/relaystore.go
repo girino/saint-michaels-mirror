@@ -949,10 +949,6 @@ func (r *RelayStore) mirrorFromRelays(ctx context.Context, relay *khatru.Relay) 
 		// subscribe to all query relays at once (handles deduplication)
 		sub := r.pool.SubMany(ctx, r.queryUrls, []nostr.Filter{filter})
 
-		// Track successful connection
-		atomic.AddInt64(&r.mirrorAttempts, 1)
-		atomic.StoreInt64(&r.consecutiveMirrorFailures, 0) // Reset on successful connection
-
 		// Process events from the subscription
 		subscriptionActive := true
 		for subscriptionActive {
@@ -975,11 +971,16 @@ func (r *RelayStore) mirrorFromRelays(ctx context.Context, relay *khatru.Relay) 
 				}
 
 				if relayEvent.Event != nil {
+					// Track successful connection on first event received
+					if atomic.LoadInt64(&r.mirrorAttempts) == 0 || atomic.LoadInt64(&r.consecutiveMirrorFailures) > 0 {
+						atomic.AddInt64(&r.mirrorAttempts, 1)
+						atomic.StoreInt64(&r.consecutiveMirrorFailures, 0) // Reset on successful event reception
+					}
+
 					// broadcast the event to all connected clients
 					clientCount := relay.BroadcastEvent(relayEvent.Event)
 					atomic.AddInt64(&r.mirroredEvents, 1)
 					atomic.AddInt64(&r.mirrorSuccesses, 1)
-					atomic.StoreInt64(&r.consecutiveMirrorFailures, 0) // Reset consecutive failures on success
 					if r.Verbose {
 						log.Printf("[relaystore] mirrored event %s from %s to %d clients", relayEvent.Event.ID, relayEvent.Relay, clientCount)
 					}
