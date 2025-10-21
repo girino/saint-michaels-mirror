@@ -483,7 +483,14 @@ func (r *RelayStore) ensureRelay(ctx context.Context, url string) (*nostr.Relay,
 	// attempt authentication if we have a relay secret key
 	if r.relaySecKey != "" {
 		if r.Verbose {
-			log.Printf("[relaystore] attempting authentication to %s", url)
+			log.Printf("[relaystore] attempting authentication to %s with key length: %d", url, len(r.relaySecKey))
+			if len(r.relaySecKey) > 0 {
+				prefixLen := 8
+				if len(r.relaySecKey) < prefixLen {
+					prefixLen = len(r.relaySecKey)
+				}
+				log.Printf("[relaystore] relaySecKey starts with: %s", r.relaySecKey[:prefixLen])
+			}
 		}
 		err = newrl.Auth(ctx, func(event *nostr.Event) error {
 			// sign the AUTH event with our relay secret key
@@ -682,48 +689,38 @@ func (r *RelayStore) SaveEvent(ctx context.Context, evt *nostr.Event) error {
 
 			if err := rl.Publish(cctx, *evt); err != nil {
 				// Check if this is an auth-required error and we have a relay key
-				// Only attempt authentication if the client itself is authenticated
 				if prefix, _ := parseErrorPrefix(err); prefix == "auth-required" && r.relaySecKey != "" {
-					// Check if the client is authenticated before using relay credentials
-					clientPubKey := khatru.GetAuthed(ctx)
-					if clientPubKey == "" {
+					if r.Verbose {
+						log.Printf("[relaystore] auth-required from %s, attempting relay authentication", u)
+					}
+
+					// Try to authenticate with the relay
+					authErr := rl.Auth(cctx, func(event *nostr.Event) error {
+						return event.Sign(r.relaySecKey)
+					})
+
+					if authErr != nil {
 						if r.Verbose {
-							log.Printf("[relaystore] auth-required from %s, but client is not authenticated - not attempting relay authentication", u)
+							log.Printf("[relaystore][WARN] authentication to %s failed: %v", u, authErr)
 						}
-						// Continue with normal error handling without attempting authentication
+						// Continue with normal error handling
 					} else {
 						if r.Verbose {
-							log.Printf("[relaystore] auth-required from %s, client authenticated as %s, attempting relay authentication", u, clientPubKey)
+							log.Printf("[relaystore] authenticated to %s, retrying publish", u)
 						}
 
-						// Try to authenticate with the relay
-						authErr := rl.Auth(cctx, func(event *nostr.Event) error {
-							return event.Sign(r.relaySecKey)
-						})
-
-						if authErr != nil {
-							if r.Verbose {
-								log.Printf("[relaystore][WARN] authentication to %s failed: %v", u, authErr)
-							}
-							// Continue with normal error handling
-						} else {
-							if r.Verbose {
-								log.Printf("[relaystore] authenticated to %s, retrying publish", u)
-							}
-
-							// Retry the publish after authentication
-							if retryErr := rl.Publish(cctx, *evt); retryErr != nil {
-								r.handleError(&errsMu, &errs, &prefixedErrs, u, retryErr, "retry publish")
-								return
-							}
-
-							// Success after authentication
-							atomic.AddInt64(&r.publishSuccesses, 1)
-							if r.Verbose {
-								log.Printf("[relaystore][DEBUG] publish to %s succeeded after authentication for event %s", u, evt.ID)
-							}
+						// Retry the publish after authentication
+						if retryErr := rl.Publish(cctx, *evt); retryErr != nil {
+							r.handleError(&errsMu, &errs, &prefixedErrs, u, retryErr, "retry publish")
 							return
 						}
+
+						// Success after authentication
+						atomic.AddInt64(&r.publishSuccesses, 1)
+						if r.Verbose {
+							log.Printf("[relaystore][DEBUG] publish to %s succeeded after authentication for event %s", u, evt.ID)
+						}
+						return
 					}
 				}
 
