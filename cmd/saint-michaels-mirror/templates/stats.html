@@ -80,6 +80,40 @@ Statistics page template for Espelho de São Miguel web interface.
             <span class="stat-value" id="relay-count-requests">-</span>
           </div>
         </div>
+        <div class="card">
+          <div class="k">Event Mirroring</div>
+          <div class="stat-item">
+            <span class="stat-label">Mirrored Events</span>
+            <span class="stat-value" id="relay-mirrored-events">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Mirror Attempts</span>
+            <span class="stat-value" id="relay-mirror-attempts">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Mirror Successes</span>
+            <span class="stat-value" id="relay-mirror-successes">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Mirror Failures</span>
+            <span class="stat-value" id="relay-mirror-failures">-</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="k">Relay Health</div>
+          <div class="stat-item">
+            <span class="stat-label">Live Relays</span>
+            <span class="stat-value" id="relay-live-count">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Dead Relays</span>
+            <span class="stat-value" id="relay-dead-count">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Total Relays</span>
+            <span class="stat-value" id="relay-total-count">-</span>
+          </div>
+        </div>
       </div>
 
       <div class="foldables">
@@ -104,12 +138,22 @@ Statistics page template for Espelho de São Miguel web interface.
             </span>
           </div>
           <div class="stat-item">
+            <span class="stat-label">Mirror Health</span>
+            <span class="stat-value">
+              <span class="health-indicator" id="health-mirror">-</span>
+            </span>
+          </div>
+          <div class="stat-item">
             <span class="stat-label">Consecutive Publish Failures</span>
             <span class="stat-value" id="health-publish-failures">-</span>
           </div>
           <div class="stat-item">
             <span class="stat-label">Consecutive Query Failures</span>
             <span class="stat-value" id="health-query-failures">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Consecutive Mirror Failures</span>
+            <span class="stat-value" id="health-mirror-failures">-</span>
           </div>
         </div>
         <div class="card">

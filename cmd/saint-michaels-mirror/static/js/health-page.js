@@ -89,9 +89,14 @@ function populateHealth(data) {
   queryHealthEl.textContent = data.query_health_state;
   queryHealthEl.className = `health-indicator ${getHealthClass(data.query_health_state)}`;
 
+  const mirrorHealthEl = document.getElementById('mirror-health');
+  mirrorHealthEl.textContent = data.mirror_health_state;
+  mirrorHealthEl.className = `health-indicator ${getHealthClass(data.mirror_health_state)}`;
+
   // Failure tracking
   document.getElementById('publish-failures').textContent = data.consecutive_publish_failures;
   document.getElementById('query-failures').textContent = data.consecutive_query_failures;
+  document.getElementById('mirror-failures').textContent = data.consecutive_mirror_failures;
 }
 
 async function loadHealth() {
