@@ -543,8 +543,10 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 
 	// Check for kind 5 deletion requests that should be cached
 	if isKind5DeletionRequest(filter) && ctx.Value(1) == nil {
-		if cached, ch := r.handleKind5Caching(ctx, filter); cached {
+		if r.handleKind5Caching(filter) {
 			atomic.AddInt64(&r.queryInternal, 1)
+			ch := make(chan *nostr.Event)
+			close(ch)
 			return ch, nil
 		}
 	}
@@ -995,7 +997,7 @@ func isKind5DeletionRequest(filter nostr.Filter) bool {
 }
 
 // handleKind5Caching manages the caching of kind 5 deletion requests
-func (r *RelayStore) handleKind5Caching(ctx context.Context, filter nostr.Filter) (bool, chan *nostr.Event) {
+func (r *RelayStore) handleKind5Caching(filter nostr.Filter) bool {
 	cacheKey := generateKind5CacheKey(filter)
 
 	r.kind5CacheMu.Lock()
@@ -1006,13 +1008,9 @@ func (r *RelayStore) handleKind5Caching(ctx context.Context, filter nostr.Filter
 		// Check if the entry is still valid (not expired)
 		if time.Since(entry.timestamp) < r.kind5CacheDelay {
 			if r.Verbose {
-				log.Printf("[relaystore][DEBUG] kind 5 request cached, waiting for batch: %s", cacheKey)
+				log.Printf("[relaystore][DEBUG] kind 5 request already cached: %s", cacheKey)
 			}
-			// Mark as waiting and return a closed channel
-			entry.waiting = true
-			ch := make(chan *nostr.Event)
-			close(ch)
-			return true, ch
+			return true
 		} else {
 			// Entry expired, remove it
 			delete(r.kind5Cache, cacheKey)
@@ -1036,10 +1034,7 @@ func (r *RelayStore) handleKind5Caching(ctx context.Context, filter nostr.Filter
 		log.Printf("[relaystore][DEBUG] kind 5 request cached with blocked events: %v", blockedEvents)
 	}
 
-	// Return a closed channel for now
-	ch := make(chan *nostr.Event)
-	close(ch)
-	return true, ch
+	return true
 }
 
 // cleanupKind5Cache removes expired cache entries
