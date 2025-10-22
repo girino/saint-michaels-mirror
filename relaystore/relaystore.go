@@ -977,6 +977,12 @@ func isKind5DeletionRequest(filter nostr.Filter) bool {
 	if len(filter.Kinds) != 1 || filter.Kinds[0] != 5 {
 		return false
 	}
+
+	// Check for "since" filter to ensure it's an internal request
+	if filter.Since == nil {
+		return false
+	}
+
 	// Check for ##a tags (deletion patterns)
 	if len(filter.Tags) > 0 {
 		for tag := range filter.Tags {
