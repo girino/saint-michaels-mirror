@@ -525,6 +525,18 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 		return ch, nil
 	}
 
+	// Additional check for other internal request patterns
+	// These are typically metadata lookups that should not be forwarded to upstream relays
+	if isInternalFilter(filter) && ctx.Value(1) == nil {
+		atomic.AddInt64(&r.queryInternal, 1)
+		if r.Verbose {
+			log.Printf("[relaystore][DEBUG] internal query short-circuited (internal filter pattern, no ctx[1]) filter=%+v", filter)
+		}
+		ch := make(chan *nostr.Event)
+		close(ch)
+		return ch, nil
+	}
+
 	atomic.AddInt64(&r.queryExternal, 1)
 
 	// if no pool available, return closed channel
@@ -777,6 +789,15 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 		return 0, nil
 	}
 
+	// Additional check for other internal request patterns
+	if isInternalFilter(filter) && ctx.Value(1) == nil {
+		atomic.AddInt64(&r.countInternal, 1)
+		if r.Verbose {
+			log.Printf("[relaystore][DEBUG] internal count short-circuited (internal filter pattern, no ctx[1]) filter=%+v", filter)
+		}
+		return 0, nil
+	}
+
 	atomic.AddInt64(&r.countExternal, 1)
 
 	if r.pool == nil {
@@ -832,6 +853,39 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 // Ensure RelayStore implements eventstore.Store and eventstore.Counter
 var _ eventstore.Store = (*RelayStore)(nil)
 var _ eventstore.Counter = (*RelayStore)(nil)
+
+// isInternalFilter detects patterns that indicate internal khatru requests
+// These patterns are typically used for internal operations and should not be forwarded to upstream relays
+func isInternalFilter(filter nostr.Filter) bool {
+	// Check for single-kind requests with limit=1 and specific authors
+	// These are typically internal lookups for metadata
+	if len(filter.Kinds) == 1 && len(filter.Authors) == 1 && filter.Limit == 1 {
+		kind := filter.Kinds[0]
+		// Common internal request patterns:
+		// - kind 3: contact lists
+		// - kind 10002: relay lists
+		// - kind 10020: relay auth
+		// - kind 10063: relay metadata
+		// - kind 11998: other internal metadata
+		internalKinds := map[int]bool{
+			3:     true, // contact lists
+			10002: true, // relay lists
+			10020: true, // relay auth
+			10063: true, // relay metadata
+			11998: true, // other internal metadata
+		}
+		if internalKinds[kind] {
+			return true
+		}
+	}
+
+	// Check for deletion checks (kind 5 with #e tag)
+	if isAddingKind5Filter(filter) {
+		return true
+	}
+
+	return false
+}
 
 // isAddingKind5Filter detects the exact filter literal used in khatru's
 // adding.go deletion-check: {Kinds: []int{5}, Tags: TagMap{"#e": []string{id}}}
