@@ -29,8 +29,9 @@ ARG VERSION
 # If GOARCH is not provided, detect it from the build environment
 RUN ARCH=${GOARCH:-$(go env GOARCH)} && \
     VSN=${VERSION:-dev} && \
+    echo "Building with version: $VSN" && \
     CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${ARCH} \
-    go build -ldflags "-X main.Version=$${VSN}" -o /out/saint-michaels-mirror ./cmd/saint-michaels-mirror
+    go build -ldflags "-X main.Version=${VSN}" -o /out/saint-michaels-mirror ./cmd/saint-michaels-mirror
 
 # Final minimal image
 FROM debian:bookworm-slim
