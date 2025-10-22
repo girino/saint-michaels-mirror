@@ -175,6 +175,8 @@ The relay monitors its own health and reports status:
 - **System Resources**: Memory usage, goroutine counts, GC statistics
 - **Remote Connectivity**: Status of connected remote relays
 - **Failure Tracking**: Consecutive failure counts with automatic recovery
+- **Mirroring Statistics**: Mirrored events, mirror attempts, successes, and failures
+- **Relay Health**: Live/dead relay counts and mirroring health state
 
 ## 🏗️ Architecture
 

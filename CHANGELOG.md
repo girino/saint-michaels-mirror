@@ -3,12 +3,31 @@
 Instruction for AI agents editing this file: prioritize human-friendly, user-facing functionality; de-emphasize CI/CD and infrastructure-only changes.
 
 ## v1.1.0 — 2025-01-21
+
+### 🔐 Authentication & Security
 - **Authentication passthrough**: Relay now automatically authenticates with upstream relays using the configured `RELAY_SECKEY` when required, supporting both raw hex and nsec bech32 formats.
-- **Structured error handling**: Machine-readable error prefixes from upstream relays (NIP-01) are now passed through to clients when all publish attempts fail, including relay URLs for context.
-- **Continuous event mirroring**: Relay automatically mirrors events from query relays using a "since now" filter, injecting them into the local relay via `khatru.BroadcastEvent()` for comprehensive event coverage.
 - **Enhanced NIP support**: Added NIP-42 (Authentication) to supported NIPs list for seamless upstream relay authentication.
-- **Improved statistics**: Added `mirrored_events` counter to stats endpoint to track mirroring activity and provide visibility into event coverage.
 - **Key format support**: Enhanced `RELAY_SECKEY` handling to support both raw hex keys and nsec bech32 encoded keys for maximum compatibility.
+
+### 📡 Event Mirroring & Aggregation
+- **Continuous event mirroring**: Relay automatically mirrors events from query relays using a "since now" filter, injecting them into the local relay via `khatru.BroadcastEvent()` for comprehensive event coverage.
+- **Smart mirroring logic**: Only requires mirroring when `QUERY_REMOTES` is configured; gracefully handles partial relay availability.
+- **Mirroring health monitoring**: Tracks live/dead relay connections and mirroring success/failure rates with configurable health thresholds.
+
+### ⚠️ Error Handling & Reliability
+- **Structured error handling**: Machine-readable error prefixes from upstream relays (NIP-01) are now passed through to clients when all publish attempts fail, including relay URLs for context.
+- **Robust health system**: Enhanced health tracking with separate indicators for publish, query, and mirroring operations.
+- **Fail-fast behavior**: Relay exits with clear error messages when configured query relays are unavailable.
+
+### 📊 Enhanced Monitoring & Statistics
+- **Comprehensive statistics**: Added mirroring metrics (`mirrored_events`, `mirror_attempts`, `mirror_successes`, `mirror_failures`) and relay health counters (`live_relays`, `dead_relays`).
+- **Improved health indicators**: Separate health states for publish, query, and mirroring operations with configurable failure thresholds.
+- **Better web interface**: Enhanced health and stats pages with new mirroring and relay health information.
+
+### 🛠️ Technical Improvements
+- **Updated dependencies**: Migrated from deprecated `SubMany` to `SubscribeMany` for better compatibility with current go-nostr library versions.
+- **Improved error parsing**: Simplified error prefix extraction with proper handling of nested error messages.
+- **Enhanced logging**: Better verbose logging for authentication attempts and mirroring operations.
 
 ## v1.0.0-rc4 — 2025-10-20
 - Preparations for launch and documentation improvements (no functional changes).

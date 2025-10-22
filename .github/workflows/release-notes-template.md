@@ -29,6 +29,9 @@ The name comes from a spiritual metaphor: the sacred mirror that stands between 
 - **Event Mirroring**: Continuously mirrors events from query relays for comprehensive coverage
 - **Structured Error Handling**: Passes through machine-readable error prefixes from upstream relays
 - **Key Format Support**: Supports both raw hex and nsec bech32 encoded keys
+- **Smart Mirroring Logic**: Only requires mirroring when query relays are configured
+- **Mirroring Health Monitoring**: Tracks live/dead relay connections and mirroring success rates
+- **Fail-Fast Behavior**: Relay exits with clear errors when configured query relays are unavailable
 
 ### **Modern Web Interface**
 - **NIP-11 Compliance**: Standard relay information endpoint
@@ -67,7 +70,8 @@ The name comes from a spiritual metaphor: the sacred mirror that stands between 
 - **Memory Monitoring**: Runtime statistics including goroutines and memory usage
 - **Query Performance**: Separate timing for query and count operations
 - **Publish Performance**: Detailed forwarding statistics
-- **Mirroring Statistics**: Track mirrored events and coverage metrics
+- **Mirroring Statistics**: Track mirrored events, attempts, successes, and failures
+- **Relay Health Metrics**: Live/dead relay counts and mirroring health state
 
 ### **Web Interface Enhancements**
 - **API Versioning**: Organized API endpoints under `/api/v1/`
