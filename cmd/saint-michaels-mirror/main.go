@@ -88,13 +88,7 @@ func main() {
 	var rs *relaystore.RelayStore
 	if len(cfg.QueryRemotes) > 0 {
 		// Query remotes are mandatory - use them
-		if len(cfg.PublishRemotes) > 0 {
-			// Both query and publish remotes provided
-			rs = relaystore.NewWithRelayKey(cfg.QueryRemotes, decodedSec, cfg.PublishRemotes...)
-		} else {
-			// Only query remotes provided (query-only mode)
-			rs = relaystore.NewWithRelayKey(cfg.QueryRemotes, decodedSec)
-		}
+		rs = relaystore.New(cfg.QueryRemotes, cfg.PublishRemotes, decodedSec)
 	} else {
 		// No query remotes provided - fail
 		log.Fatalf("no query remotes provided - relaystore requires query remotes")

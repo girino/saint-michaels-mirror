@@ -264,13 +264,8 @@ func (r *RelayStore) Stats() Stats {
 	}
 }
 
-// New creates a RelayStore with mandatory query relays and optional publish relays.
-func New(queryUrls []string, publishUrls ...string) *RelayStore {
-	return NewWithRelayKey(queryUrls, "", publishUrls...)
-}
-
-// NewWithRelayKey creates a RelayStore with mandatory query relays, optional publish relays, and optional relay authentication key.
-func NewWithRelayKey(queryUrls []string, relaySecKey string, publishUrls ...string) *RelayStore {
+// New creates a RelayStore with mandatory query relays, optional publish relays, and optional relay authentication key.
+func New(queryUrls []string, publishUrls []string, relaySecKey string) *RelayStore {
 	if len(queryUrls) == 0 {
 		panic("query relays are mandatory - at least one query relay must be provided")
 	}
@@ -284,18 +279,6 @@ func NewWithRelayKey(queryUrls []string, relaySecKey string, publishUrls ...stri
 		relaySecKey:            relaySecKey,
 	}
 	return rs
-}
-
-// NewWithQueryRemotes creates a RelayStore with separate publish remotes and query remotes.
-// Deprecated: Use New() instead with query relays as first parameter and publish relays as variadic.
-func NewWithQueryRemotes(publish []string, query []string) *RelayStore {
-	return NewWithRelayKey(query, "", publish...)
-}
-
-// NewWithQueryRemotesAndRelayKey creates a RelayStore with separate publish remotes and query remotes, with optional relay authentication key.
-// Deprecated: Use NewWithRelayKey() instead with query relays as first parameter and publish relays as variadic.
-func NewWithQueryRemotesAndRelayKey(publish []string, query []string, relaySecKey string) *RelayStore {
-	return NewWithRelayKey(query, relaySecKey, publish...)
 }
 
 func (r *RelayStore) Init() error {
