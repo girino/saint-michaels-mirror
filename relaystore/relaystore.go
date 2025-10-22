@@ -109,18 +109,6 @@ type RelayStore struct {
 	Verbose bool
 	// relaySecKey is the private key used for authenticating to upstream relays
 	relaySecKey string
-	// mirroring state
-	mirrorCtx      context.Context
-	mirrorCancel   context.CancelFunc
-	mirroredEvents int64
-	// mirroring health tracking
-	mirrorAttempts            int64
-	mirrorSuccesses           int64
-	mirrorFailures            int64
-	consecutiveMirrorFailures int64
-	// relay health tracking
-	liveRelays int64
-	deadRelays int64
 	// stats
 	publishAttempts     int64
 	publishSuccesses    int64
@@ -183,16 +171,6 @@ type Stats struct {
 	TotalPublishDurationMs   int64   `json:"total_publish_duration_ms"`
 	TotalQueryDurationMs     int64   `json:"total_query_duration_ms"`
 	TotalCountDurationMs     int64   `json:"total_count_duration_ms"`
-	// Mirroring statistics
-	MirroredEvents            int64  `json:"mirrored_events"`
-	MirrorAttempts            int64  `json:"mirror_attempts"`
-	MirrorSuccesses           int64  `json:"mirror_successes"`
-	MirrorFailures            int64  `json:"mirror_failures"`
-	ConsecutiveMirrorFailures int64  `json:"consecutive_mirror_failures"`
-	MirrorHealthState         string `json:"mirror_health_state"`
-	// Relay health statistics
-	LiveRelays int64 `json:"live_relays"`
-	DeadRelays int64 `json:"dead_relays"`
 }
 
 // getHealthState determines the health state based on consecutive failures
@@ -220,10 +198,9 @@ func getWorstHealthState(state1, state2, state3 string) string {
 func (r *RelayStore) Stats() Stats {
 	consecutivePublishFailures := atomic.LoadInt64(&r.consecutivePublishFailures)
 	consecutiveQueryFailures := atomic.LoadInt64(&r.consecutiveQueryFailures)
-	consecutiveMirrorFailures := atomic.LoadInt64(&r.consecutiveMirrorFailures)
 	maxFailures := atomic.LoadInt64(&r.maxConsecutiveFailures)
 
-	isHealthy := consecutivePublishFailures < maxFailures && consecutiveQueryFailures < maxFailures && consecutiveMirrorFailures < maxFailures
+	isHealthy := consecutivePublishFailures < maxFailures && consecutiveQueryFailures < maxFailures
 	healthStatus := "healthy"
 	if !isHealthy {
 		healthStatus = "unhealthy"
@@ -232,8 +209,7 @@ func (r *RelayStore) Stats() Stats {
 	// Determine individual health states
 	publishHealthState := getHealthState(consecutivePublishFailures)
 	queryHealthState := getHealthState(consecutiveQueryFailures)
-	mirrorHealthState := getHealthState(consecutiveMirrorFailures)
-	mainHealthState := getWorstHealthState(publishHealthState, queryHealthState, mirrorHealthState)
+	mainHealthState := getWorstHealthState(publishHealthState, queryHealthState, HealthGreen)
 
 	// Calculate timing statistics
 	totalPublishDurationNs := atomic.LoadInt64(&r.totalPublishDurationNs)
@@ -285,16 +261,6 @@ func (r *RelayStore) Stats() Stats {
 		TotalPublishDurationMs:   totalPublishDurationNs / 1e6, // Convert ns to ms
 		TotalQueryDurationMs:     totalQueryDurationNs / 1e6,   // Convert ns to ms
 		TotalCountDurationMs:     totalCountDurationNs / 1e6,   // Convert ns to ms
-		// Mirroring statistics
-		MirroredEvents:            atomic.LoadInt64(&r.mirroredEvents),
-		MirrorAttempts:            atomic.LoadInt64(&r.mirrorAttempts),
-		MirrorSuccesses:           atomic.LoadInt64(&r.mirrorSuccesses),
-		MirrorFailures:            atomic.LoadInt64(&r.mirrorFailures),
-		ConsecutiveMirrorFailures: consecutiveMirrorFailures,
-		MirrorHealthState:         mirrorHealthState,
-		// Relay health statistics
-		LiveRelays: atomic.LoadInt64(&r.liveRelays),
-		DeadRelays: atomic.LoadInt64(&r.deadRelays),
 	}
 }
 
@@ -901,165 +867,4 @@ func isAddingKind5Filter(f nostr.Filter) bool {
 		return len(vs) == 1 && len(f.Authors) == 0 && f.Since == nil && f.Until == nil && len(f.IDs) == 0
 	}
 	return false
-}
-
-// StartMirroring begins continuous mirroring of events from query relays to the khatru relay
-func (r *RelayStore) StartMirroring(relay *khatru.Relay) error {
-	if r.mirrorCtx != nil {
-		// already started
-		return nil
-	}
-
-	if len(r.queryUrls) == 0 {
-		// No query relays configured - this is OK, relay can work without mirroring
-		if r.Verbose {
-			log.Printf("[relaystore] no query relays configured, skipping mirroring")
-		}
-		return nil
-	}
-
-	// Check connectivity to all query relays first
-	liveCount := 0
-	for _, url := range r.queryUrls {
-		_, err := r.pool.EnsureRelay(url)
-		if err != nil {
-			if r.Verbose {
-				log.Printf("[relaystore] failed initial connect to %s: %v", url, err)
-			}
-		} else {
-			liveCount++
-		}
-	}
-
-	if liveCount == 0 {
-		// Query relays are configured but none are available - this is a fatal error
-		return fmt.Errorf("no query relays are available (configured: %d)", len(r.queryUrls))
-	}
-
-	if r.Verbose {
-		log.Printf("[relaystore] starting event mirroring from %d query relays (%d/%d available)", len(r.queryUrls), liveCount, len(r.queryUrls))
-	}
-
-	r.mirrorCtx, r.mirrorCancel = context.WithCancel(context.Background())
-
-	// start single mirroring goroutine for all query relays
-	go r.mirrorFromRelays(r.mirrorCtx, relay)
-
-	return nil
-}
-
-// StopMirroring stops the continuous mirroring of events
-func (r *RelayStore) StopMirroring() {
-	if r.mirrorCancel != nil {
-		if r.Verbose {
-			log.Printf("[relaystore] stopping event mirroring")
-		}
-		r.mirrorCancel()
-		r.mirrorCtx = nil
-		r.mirrorCancel = nil
-	}
-}
-
-// mirrorFromRelays continuously mirrors events from all query relays
-func (r *RelayStore) mirrorFromRelays(ctx context.Context, relay *khatru.Relay) {
-	if r.Verbose {
-		log.Printf("[relaystore] starting mirror from %d query relays: %v", len(r.queryUrls), r.queryUrls)
-	}
-
-	// create a filter that gets all events since now
-	now := nostr.Now()
-	filter := nostr.Filter{Since: &now}
-
-	// subscribe to all query relays at once (handles deduplication)
-	sub := r.pool.SubscribeMany(ctx, r.queryUrls, filter)
-
-	// Start relay health monitoring goroutine
-	go r.monitorRelayHealth(ctx)
-
-	for {
-		select {
-		case <-ctx.Done():
-			if r.Verbose {
-				log.Printf("[relaystore] mirror from query relays stopped (context cancelled)")
-			}
-			return
-		case relayEvent, ok := <-sub:
-			if !ok {
-				if r.Verbose {
-					log.Printf("[relaystore] mirror subscription closed")
-				}
-				return
-			}
-
-			if relayEvent.Event != nil {
-				// broadcast the event to all connected clients
-				clientCount := relay.BroadcastEvent(relayEvent.Event)
-				atomic.AddInt64(&r.mirroredEvents, 1)
-				atomic.AddInt64(&r.mirrorSuccesses, 1)
-				if r.Verbose {
-					log.Printf("[relaystore] mirrored event %s from %s to %d clients", relayEvent.Event.ID, relayEvent.Relay, clientCount)
-				}
-			}
-		}
-	}
-}
-
-// monitorRelayHealth periodically checks the health of all query relays
-func (r *RelayStore) monitorRelayHealth(ctx context.Context) {
-	ticker := time.NewTicker(30 * time.Second) // Check every 30 seconds
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			r.checkRelayHealth()
-		}
-	}
-}
-
-// checkRelayHealth checks each relay and updates health counters
-func (r *RelayStore) checkRelayHealth() {
-	if len(r.queryUrls) == 0 {
-		return
-	}
-
-	deadCount := int64(0)
-
-	for _, url := range r.queryUrls {
-		_, err := r.pool.EnsureRelay(url)
-		if err != nil {
-			deadCount++
-			if r.Verbose {
-				log.Printf("[relaystore] relay %s is dead: %v", url, err)
-			}
-		}
-	}
-
-	// Calculate live count from total and dead
-	totalRelays := int64(len(r.queryUrls))
-	liveCount := totalRelays - deadCount
-
-	// Update counters
-	atomic.StoreInt64(&r.liveRelays, liveCount)
-	atomic.StoreInt64(&r.deadRelays, deadCount)
-
-	// Check if more than half are dead
-	threshold := totalRelays / 2
-
-	if deadCount > threshold {
-		// More than half are dead - count as failure
-		atomic.AddInt64(&r.mirrorFailures, 1)
-		atomic.AddInt64(&r.consecutiveMirrorFailures, 1)
-		if r.Verbose {
-			log.Printf("[relaystore] mirror health check failed: %d/%d relays dead", deadCount, totalRelays)
-		}
-	} else {
-		// Half or less are dead (more than half are alive) - reset failures
-		atomic.StoreInt64(&r.consecutiveMirrorFailures, 0)
-		if r.Verbose {
-			log.Printf("[relaystore] mirror health check passed: %d/%d relays alive", liveCount, totalRelays)
-		}
-	}
 }

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/fiatjaf/khatru"
+	"github.com/girino/saint-michaels-mirror/mirror"
 	"github.com/girino/saint-michaels-mirror/relaystore"
 	"github.com/nbd-wtf/go-nostr"
 	nip11 "github.com/nbd-wtf/go-nostr/nip11"
@@ -102,6 +103,21 @@ func main() {
 		log.Fatalf("initializing relaystore: %v", err)
 	}
 
+	// initialize mirror manager with query remotes
+	var mm *mirror.MirrorManager
+	if len(cfg.QueryRemotes) > 0 {
+		mm = mirror.NewMirrorManager(cfg.QueryRemotes)
+	} else {
+		// use default query remotes for mirroring
+		mm = mirror.NewMirrorManager([]string{"wss://wot.girino.org", "wss://nostr.girino.org"})
+	}
+	if cfg.Verbose {
+		mm.Verbose = true
+	}
+	if err := mm.Init(); err != nil {
+		log.Fatalf("initializing mirror manager: %v", err)
+	}
+
 	// Ensure some canonical NIP-11 fields are set on the relay Info. ApplyToRelay
 	// sets most fields from config; here we only set safe defaults when empty
 	// and make sure SupportedNIPs includes 11 so khatru will serve NIP-11.
@@ -163,16 +179,19 @@ func main() {
 	r.CountEvents = append(r.CountEvents, rs.CountEvents)
 
 	// start event mirroring from query relays
-	if err := rs.StartMirroring(r); err != nil {
-		log.Fatalf("[relaystore] failed to start mirroring: %v", err)
+	if err := mm.StartMirroring(r); err != nil {
+		log.Fatalf("[mirror] failed to start mirroring: %v", err)
 	}
-	defer rs.StopMirroring()
+	defer mm.StopMirroring()
 
 	// expose stats endpoint using the relay's router
 	mux := r.Router()
 	mux.HandleFunc("/api/v1/stats", func(w http.ResponseWriter, req *http.Request) {
 		// Get relaystore stats
 		relayStats := rs.Stats()
+
+		// Get mirror stats
+		mirrorStats := mm.Stats()
 
 		// Get runtime stats
 		var m runtime.MemStats
@@ -182,6 +201,9 @@ func main() {
 		stats := map[string]interface{}{
 			// Relay store stats
 			"relay": relayStats,
+
+			// Mirror stats
+			"mirror": mirrorStats,
 
 			// Application runtime stats
 			"app": map[string]interface{}{
@@ -221,11 +243,20 @@ func main() {
 		// Get relaystore health status
 		relayStats := rs.Stats()
 
+		// Get mirror health status
+		mirrorStats := mm.Stats()
+
 		// Determine overall health status and HTTP status code
 		var httpStatus int
 		var status string
 
-		switch relayStats.MainHealthState {
+		// Use the worst health state between relay and mirror
+		mainHealthState := relayStats.MainHealthState
+		if mirrorStats.MirrorHealthState == "RED" || (mirrorStats.MirrorHealthState == "YELLOW" && mainHealthState == "GREEN") {
+			mainHealthState = mirrorStats.MirrorHealthState
+		}
+
+		switch mainHealthState {
 		case "GREEN":
 			httpStatus = http.StatusOK
 			status = "healthy"
@@ -244,13 +275,13 @@ func main() {
 			"status":                       status,
 			"service":                      r.Info.Name,
 			"version":                      Version,
-			"main_health_state":            relayStats.MainHealthState,
+			"main_health_state":            mainHealthState,
 			"publish_health_state":         relayStats.PublishHealthState,
 			"query_health_state":           relayStats.QueryHealthState,
-			"mirror_health_state":          relayStats.MirrorHealthState,
+			"mirror_health_state":          mirrorStats.MirrorHealthState,
 			"consecutive_publish_failures": relayStats.ConsecutivePublishFailures,
 			"consecutive_query_failures":   relayStats.ConsecutiveQueryFailures,
-			"consecutive_mirror_failures":  relayStats.ConsecutiveMirrorFailures,
+			"consecutive_mirror_failures":  mirrorStats.ConsecutiveMirrorFailures,
 		}
 
 		w.WriteHeader(httpStatus)
