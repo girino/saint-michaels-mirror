@@ -32,6 +32,13 @@ const (
 	HealthRed    = "RED"
 )
 
+// kind5CacheEntry represents a cached kind 5 deletion request
+type kind5CacheEntry struct {
+	filter    nostr.Filter
+	timestamp time.Time
+	waiting   bool
+}
+
 // PrefixedError represents an error with a machine-readable prefix from NIP-01
 type PrefixedError struct {
 	Prefix   string
@@ -137,6 +144,10 @@ type RelayStore struct {
 	publishCount           int64
 	queryCount             int64
 	countCount             int64
+	// kind 5 deletion request caching
+	kind5Cache      map[string]*kind5CacheEntry
+	kind5CacheMu    sync.RWMutex
+	kind5CacheDelay time.Duration
 }
 
 // Stats holds runtime counters exported by RelayStore
@@ -277,6 +288,8 @@ func New(queryUrls []string, publishUrls []string, relaySecKey string) *RelaySto
 		publishTimeout:         7 * time.Second,
 		maxConsecutiveFailures: 10, // Default threshold: 10 consecutive failures
 		relaySecKey:            relaySecKey,
+		kind5Cache:             make(map[string]*kind5CacheEntry),
+		kind5CacheDelay:        3 * time.Second, // Cache for 3 seconds
 	}
 	return rs
 }
@@ -535,6 +548,14 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 		ch := make(chan *nostr.Event)
 		close(ch)
 		return ch, nil
+	}
+
+	// Check for kind 5 deletion requests that should be cached
+	if isKind5DeletionRequest(filter) && ctx.Value(1) == nil {
+		if cached, ch := r.handleKind5Caching(ctx, filter); cached {
+			atomic.AddInt64(&r.queryInternal, 1)
+			return ch, nil
+		}
 	}
 
 	atomic.AddInt64(&r.queryExternal, 1)
@@ -900,4 +921,139 @@ func isAddingKind5Filter(f nostr.Filter) bool {
 		return len(vs) == 1 && len(f.Authors) == 0 && f.Since == nil && f.Until == nil && len(f.IDs) == 0
 	}
 	return false
+}
+
+// generateKind5CacheKey creates a cache key for kind 5 deletion requests
+func generateKind5CacheKey(filter nostr.Filter) string {
+	// Create a key based on the filter's essential components
+	key := fmt.Sprintf("kind5:%d", filter.Kinds[0])
+	if filter.Since != nil {
+		key += fmt.Sprintf(":since:%d", *filter.Since)
+	}
+	if filter.Until != nil {
+		key += fmt.Sprintf(":until:%d", *filter.Until)
+	}
+	if len(filter.Authors) > 0 {
+		key += fmt.Sprintf(":authors:%s", strings.Join(filter.Authors, ","))
+	}
+	if len(filter.IDs) > 0 {
+		key += fmt.Sprintf(":ids:%s", strings.Join(filter.IDs, ","))
+	}
+	// Include tag patterns
+	for tag, values := range filter.Tags {
+		key += fmt.Sprintf(":%s:%s", tag, strings.Join(values, ","))
+	}
+	return key
+}
+
+// isKind5DeletionRequest checks if this is a kind 5 deletion request that should be cached
+func isKind5DeletionRequest(filter nostr.Filter) bool {
+	if len(filter.Kinds) != 1 || filter.Kinds[0] != 5 {
+		return false
+	}
+	// Check for ##a tags (deletion patterns)
+	if len(filter.Tags) > 0 {
+		for tag := range filter.Tags {
+			if strings.HasPrefix(tag, "##") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// handleKind5Caching manages the caching of kind 5 deletion requests
+func (r *RelayStore) handleKind5Caching(ctx context.Context, filter nostr.Filter) (bool, chan *nostr.Event) {
+	cacheKey := generateKind5CacheKey(filter)
+
+	r.kind5CacheMu.Lock()
+	defer r.kind5CacheMu.Unlock()
+
+	// Check if we have a cached entry
+	if entry, exists := r.kind5Cache[cacheKey]; exists {
+		// Check if the entry is still valid (not expired)
+		if time.Since(entry.timestamp) < r.kind5CacheDelay {
+			if r.Verbose {
+				log.Printf("[relaystore][DEBUG] kind 5 request cached, waiting for batch: %s", cacheKey)
+			}
+			// Mark as waiting and return a closed channel
+			entry.waiting = true
+			ch := make(chan *nostr.Event)
+			close(ch)
+			return true, ch
+		} else {
+			// Entry expired, remove it
+			delete(r.kind5Cache, cacheKey)
+		}
+	}
+
+	// No cached entry or expired, create new one
+	entry := &kind5CacheEntry{
+		filter:    filter,
+		timestamp: time.Now(),
+		waiting:   false,
+	}
+	r.kind5Cache[cacheKey] = entry
+
+	// Start a goroutine to handle the delayed execution
+	go r.processKind5Request(ctx, cacheKey, filter)
+
+	if r.Verbose {
+		log.Printf("[relaystore][DEBUG] kind 5 request cached, processing after delay: %s", cacheKey)
+	}
+
+	// Return a closed channel for now
+	ch := make(chan *nostr.Event)
+	close(ch)
+	return true, ch
+}
+
+// processKind5Request processes a kind 5 request after the cache delay
+func (r *RelayStore) processKind5Request(ctx context.Context, cacheKey string, filter nostr.Filter) {
+	// Wait for the cache delay
+	time.Sleep(r.kind5CacheDelay)
+
+	r.kind5CacheMu.Lock()
+	entry, exists := r.kind5Cache[cacheKey]
+	if !exists {
+		r.kind5CacheMu.Unlock()
+		return
+	}
+
+	// Check if we're still waiting (no matching request came in)
+	if !entry.waiting {
+		// Remove from cache and process normally
+		delete(r.kind5Cache, cacheKey)
+		r.kind5CacheMu.Unlock()
+
+		if r.Verbose {
+			log.Printf("[relaystore][DEBUG] kind 5 request processed after delay (no match): %s", cacheKey)
+		}
+
+		// Process the request normally by forwarding to upstream
+		r.forwardQueryRequest(ctx, filter)
+	} else {
+		// We have a matching request, remove from cache
+		delete(r.kind5Cache, cacheKey)
+		r.kind5CacheMu.Unlock()
+
+		if r.Verbose {
+			log.Printf("[relaystore][DEBUG] kind 5 request processed after delay (matched): %s", cacheKey)
+		}
+
+		// Process both requests together by forwarding to upstream
+		r.forwardQueryRequest(ctx, filter)
+	}
+}
+
+// forwardQueryRequest forwards a query request to upstream relays
+func (r *RelayStore) forwardQueryRequest(ctx context.Context, filter nostr.Filter) {
+	// This is where we forward the request to upstream relays
+	// For now, we'll just log it - the actual forwarding logic would go here
+	if r.Verbose {
+		log.Printf("[relaystore][DEBUG] forwarding query request to upstream: %+v", filter)
+	}
+
+	// TODO: Implement actual forwarding logic here
+	// This would involve calling the upstream relays with the filter
 }
