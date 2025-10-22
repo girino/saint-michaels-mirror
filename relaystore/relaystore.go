@@ -15,6 +15,7 @@ import (
 	"log"
 	"net/http"
 	neturl "net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -37,6 +38,8 @@ type kind5CacheEntry struct {
 	filter    nostr.Filter
 	timestamp time.Time
 	waiting   bool
+	// blockedEvents stores the events that should be blocked based on ##a tags
+	blockedEvents map[string]bool // key format: "kind:author"
 }
 
 // PrefixedError represents an error with a machine-readable prefix from NIP-01
@@ -546,6 +549,17 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 		}
 	}
 
+	// Check if this request should be blocked based on cached kind 5 deletion requests
+	if r.isBlockedEvent(filter) && ctx.Value(1) == nil {
+		atomic.AddInt64(&r.queryInternal, 1)
+		if r.Verbose {
+			log.Printf("[relaystore][DEBUG] request blocked due to kind 5 deletion: %+v", filter)
+		}
+		ch := make(chan *nostr.Event)
+		close(ch)
+		return ch, nil
+	}
+
 	atomic.AddInt64(&r.queryExternal, 1)
 
 	// if no pool available, return closed channel
@@ -798,6 +812,15 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 		return 0, nil
 	}
 
+	// Check if this request should be blocked based on cached kind 5 deletion requests
+	if r.isBlockedEvent(filter) && ctx.Value(1) == nil {
+		atomic.AddInt64(&r.countInternal, 1)
+		if r.Verbose {
+			log.Printf("[relaystore][DEBUG] count request blocked due to kind 5 deletion: %+v", filter)
+		}
+		return 0, nil
+	}
+
 	atomic.AddInt64(&r.countExternal, 1)
 
 	if r.pool == nil {
@@ -892,6 +915,63 @@ func generateKind5CacheKey(filter nostr.Filter) string {
 	return key
 }
 
+// parseKind5BlockedEvents extracts blocked events from ##a tags in kind 5 requests
+func parseKind5BlockedEvents(filter nostr.Filter) map[string]bool {
+	blockedEvents := make(map[string]bool)
+
+	for tag, values := range filter.Tags {
+		if strings.HasPrefix(tag, "##") {
+			// Parse ##a tags like "10002:fbc48d3446dc4668a58340f9fc33f07be9a957044106615885f140a95c088a5f:"
+			for _, value := range values {
+				// Split by colon to get kind:author
+				parts := strings.Split(value, ":")
+				if len(parts) >= 2 {
+					kind := parts[0]
+					author := parts[1]
+					if kind != "" && author != "" {
+						blockedEvents[fmt.Sprintf("%s:%s", kind, author)] = true
+					}
+				}
+			}
+		}
+	}
+
+	return blockedEvents
+}
+
+// isBlockedEvent checks if a request should be blocked based on cached kind 5 deletion requests
+func (r *RelayStore) isBlockedEvent(filter nostr.Filter) bool {
+	r.kind5CacheMu.RLock()
+	defer r.kind5CacheMu.RUnlock()
+
+	// Check if this request matches any blocked events
+	for _, entry := range r.kind5Cache {
+		// Check if entry is still valid (not expired)
+		if time.Since(entry.timestamp) < r.kind5CacheDelay {
+			// Check if this filter matches any blocked events
+			for blockedKey := range entry.blockedEvents {
+				parts := strings.Split(blockedKey, ":")
+				if len(parts) == 2 {
+					blockedKind := parts[0]
+					blockedAuthor := parts[1]
+
+					// Check if this request matches the blocked kind and author
+					if len(filter.Kinds) == 1 {
+						// Convert blockedKind string to int for comparison
+						if blockedKindInt, err := strconv.Atoi(blockedKind); err == nil && filter.Kinds[0] == blockedKindInt {
+							if len(filter.Authors) == 1 && filter.Authors[0] == blockedAuthor {
+								return true
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return false
+}
+
 // isKind5DeletionRequest checks if this is a kind 5 deletion request that should be cached
 func isKind5DeletionRequest(filter nostr.Filter) bool {
 	if len(filter.Kinds) != 1 || filter.Kinds[0] != 5 {
@@ -934,18 +1014,20 @@ func (r *RelayStore) handleKind5Caching(ctx context.Context, filter nostr.Filter
 	}
 
 	// No cached entry or expired, create new one
+	blockedEvents := parseKind5BlockedEvents(filter)
 	entry := &kind5CacheEntry{
-		filter:    filter,
-		timestamp: time.Now(),
-		waiting:   false,
+		filter:        filter,
+		timestamp:     time.Now(),
+		waiting:       false,
+		blockedEvents: blockedEvents,
 	}
 	r.kind5Cache[cacheKey] = entry
 
-	// Start a goroutine to handle the delayed execution
-	go r.processKind5Request(ctx, cacheKey, filter)
+	// Start a goroutine to handle the delayed cleanup
+	go r.cleanupKind5Cache(cacheKey)
 
 	if r.Verbose {
-		log.Printf("[relaystore][DEBUG] kind 5 request cached, processing after delay: %s", cacheKey)
+		log.Printf("[relaystore][DEBUG] kind 5 request cached with blocked events: %v", blockedEvents)
 	}
 
 	// Return a closed channel for now
@@ -954,52 +1036,18 @@ func (r *RelayStore) handleKind5Caching(ctx context.Context, filter nostr.Filter
 	return true, ch
 }
 
-// processKind5Request processes a kind 5 request after the cache delay
-func (r *RelayStore) processKind5Request(ctx context.Context, cacheKey string, filter nostr.Filter) {
+// cleanupKind5Cache removes expired cache entries
+func (r *RelayStore) cleanupKind5Cache(cacheKey string) {
 	// Wait for the cache delay
 	time.Sleep(r.kind5CacheDelay)
 
 	r.kind5CacheMu.Lock()
-	entry, exists := r.kind5Cache[cacheKey]
-	if !exists {
-		r.kind5CacheMu.Unlock()
-		return
-	}
+	defer r.kind5CacheMu.Unlock()
 
-	// Check if we're still waiting (no matching request came in)
-	if !entry.waiting {
-		// Remove from cache and process normally
-		delete(r.kind5Cache, cacheKey)
-		r.kind5CacheMu.Unlock()
+	// Remove the cache entry after delay
+	delete(r.kind5Cache, cacheKey)
 
-		if r.Verbose {
-			log.Printf("[relaystore][DEBUG] kind 5 request processed after delay (no match): %s", cacheKey)
-		}
-
-		// Process the request normally by forwarding to upstream
-		r.forwardQueryRequest(ctx, filter)
-	} else {
-		// We have a matching request, remove from cache
-		delete(r.kind5Cache, cacheKey)
-		r.kind5CacheMu.Unlock()
-
-		if r.Verbose {
-			log.Printf("[relaystore][DEBUG] kind 5 request processed after delay (matched): %s", cacheKey)
-		}
-
-		// Process both requests together by forwarding to upstream
-		r.forwardQueryRequest(ctx, filter)
-	}
-}
-
-// forwardQueryRequest forwards a query request to upstream relays
-func (r *RelayStore) forwardQueryRequest(ctx context.Context, filter nostr.Filter) {
-	// This is where we forward the request to upstream relays
-	// For now, we'll just log it - the actual forwarding logic would go here
 	if r.Verbose {
-		log.Printf("[relaystore][DEBUG] forwarding query request to upstream: %+v", filter)
+		log.Printf("[relaystore][DEBUG] kind 5 cache entry cleaned up: %s", cacheKey)
 	}
-
-	// TODO: Implement actual forwarding logic here
-	// This would involve calling the upstream relays with the filter
 }
