@@ -32,15 +32,6 @@ const (
 	HealthRed    = "RED"
 )
 
-// kind5CacheEntry represents a cached kind 5 deletion request
-type kind5CacheEntry struct {
-	filter    nostr.Filter
-	timestamp time.Time
-	waiting   bool
-	// blockedEvents stores the events that should be blocked based on ##a tags
-	blockedEvents map[string]bool // key format: "kind:author"
-}
-
 // PrefixedError represents an error with a machine-readable prefix from NIP-01
 type PrefixedError struct {
 	Prefix   string
@@ -146,10 +137,10 @@ type RelayStore struct {
 	publishCount           int64
 	queryCount             int64
 	countCount             int64
-	// kind 5 deletion request caching
-	kind5Cache      map[string]*kind5CacheEntry
-	kind5CacheMu    sync.RWMutex
-	kind5CacheDelay time.Duration
+	// kind 5 deletion request caching - keyed by blocked events for efficient lookup
+	kind5BlockedEvents map[string]time.Time // key: "kind:author", value: expiration time
+	kind5CacheMu       sync.RWMutex
+	kind5CacheDelay    time.Duration
 }
 
 // Stats holds runtime counters exported by RelayStore
@@ -290,7 +281,7 @@ func New(queryUrls []string, publishUrls []string, relaySecKey string) *RelaySto
 		publishTimeout:         7 * time.Second,
 		maxConsecutiveFailures: 10, // Default threshold: 10 consecutive failures
 		relaySecKey:            relaySecKey,
-		kind5Cache:             make(map[string]*kind5CacheEntry),
+		kind5BlockedEvents:     make(map[string]time.Time),
 		kind5CacheDelay:        3 * time.Second, // Cache for 3 seconds
 	}
 	return rs
@@ -956,14 +947,11 @@ func (r *RelayStore) isBlockedEvent(filter nostr.Filter) bool {
 	r.kind5CacheMu.RLock()
 	defer r.kind5CacheMu.RUnlock()
 
-	// Check if this kind:author combination is blocked by any cached kind 5 request
-	for _, entry := range r.kind5Cache {
-		// Check if entry is still valid (not expired)
-		if time.Since(entry.timestamp) < r.kind5CacheDelay {
-			// Check if this request matches any blocked events
-			if entry.blockedEvents[blockedKey] {
-				return true
-			}
+	// Direct O(1) lookup for blocked events
+	if expirationTime, exists := r.kind5BlockedEvents[blockedKey]; exists {
+		// Check if the entry is still valid (not expired)
+		if time.Now().Before(expirationTime) {
+			return true
 		}
 	}
 
@@ -992,69 +980,24 @@ func isKind5DeletionRequest(filter nostr.Filter) bool {
 	return false
 }
 
-// getKind5CacheEntry safely retrieves a cache entry if it exists and is valid
-func (r *RelayStore) getKind5CacheEntry(cacheKey string) (*kind5CacheEntry, bool) {
-	r.kind5CacheMu.RLock()
-	defer r.kind5CacheMu.RUnlock()
-
-	entry, exists := r.kind5Cache[cacheKey]
-	if !exists {
-		return nil, false
-	}
-
-	// Check if the entry is still valid (not expired)
-	if time.Since(entry.timestamp) >= r.kind5CacheDelay {
-		return nil, false
-	}
-
-	return entry, true
-}
-
-// removeKind5CacheEntry safely removes a cache entry
-func (r *RelayStore) removeKind5CacheEntry(cacheKey string) {
-	r.kind5CacheMu.Lock()
-	defer r.kind5CacheMu.Unlock()
-	delete(r.kind5Cache, cacheKey)
-}
-
-// addKind5CacheEntry safely adds a new cache entry
-func (r *RelayStore) addKind5CacheEntry(cacheKey string, filter nostr.Filter) {
-	r.kind5CacheMu.Lock()
-	defer r.kind5CacheMu.Unlock()
-
-	blockedEvents := parseKind5BlockedEvents(filter)
-	entry := &kind5CacheEntry{
-		filter:        filter,
-		timestamp:     time.Now(),
-		waiting:       false,
-		blockedEvents: blockedEvents,
-	}
-	r.kind5Cache[cacheKey] = entry
-}
-
 // handleKind5Caching manages the caching of kind 5 deletion requests
 func (r *RelayStore) handleKind5Caching(filter nostr.Filter) bool {
-	cacheKey := generateKind5CacheKey(filter)
+	// Parse blocked events from the kind 5 request
+	blockedEvents := parseKind5BlockedEvents(filter)
 
-	// Check if we have a valid cached entry
-	if _, valid := r.getKind5CacheEntry(cacheKey); valid {
-		if r.Verbose {
-			log.Printf("[relaystore][DEBUG] kind 5 request already cached: %s", cacheKey)
-		}
-		return true
+	r.kind5CacheMu.Lock()
+	defer r.kind5CacheMu.Unlock()
+
+	// Add each blocked event to the cache with expiration time
+	expirationTime := time.Now().Add(r.kind5CacheDelay)
+	for blockedKey := range blockedEvents {
+		r.kind5BlockedEvents[blockedKey] = expirationTime
 	}
 
-	// Entry doesn't exist or expired, remove it if it exists
-	r.removeKind5CacheEntry(cacheKey)
-
-	// Create new cache entry
-	r.addKind5CacheEntry(cacheKey, filter)
-
 	// Start a goroutine to handle the delayed cleanup
-	go r.cleanupKind5Cache(cacheKey)
+	go r.cleanupKind5Cache(blockedEvents)
 
 	if r.Verbose {
-		blockedEvents := parseKind5BlockedEvents(filter)
 		log.Printf("[relaystore][DEBUG] kind 5 request cached with blocked events: %v", blockedEvents)
 	}
 
@@ -1062,13 +1005,19 @@ func (r *RelayStore) handleKind5Caching(filter nostr.Filter) bool {
 }
 
 // cleanupKind5Cache removes expired cache entries
-func (r *RelayStore) cleanupKind5Cache(cacheKey string) {
+func (r *RelayStore) cleanupKind5Cache(blockedEvents map[string]bool) {
 	// Wait for the cache delay
 	time.Sleep(r.kind5CacheDelay)
 
-	r.removeKind5CacheEntry(cacheKey)
+	r.kind5CacheMu.Lock()
+	defer r.kind5CacheMu.Unlock()
+
+	// Remove the blocked events from cache
+	for blockedKey := range blockedEvents {
+		delete(r.kind5BlockedEvents, blockedKey)
+	}
 
 	if r.Verbose {
-		log.Printf("[relaystore][DEBUG] kind 5 cache entry cleaned up: %s", cacheKey)
+		log.Printf("[relaystore][DEBUG] kind 5 blocked events cleaned up: %v", blockedEvents)
 	}
 }
