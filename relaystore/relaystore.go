@@ -996,28 +996,36 @@ func isKind5DeletionRequest(filter nostr.Filter) bool {
 	return false
 }
 
-// handleKind5Caching manages the caching of kind 5 deletion requests
-func (r *RelayStore) handleKind5Caching(filter nostr.Filter) bool {
-	cacheKey := generateKind5CacheKey(filter)
+// getKind5CacheEntry safely retrieves a cache entry if it exists and is valid
+func (r *RelayStore) getKind5CacheEntry(cacheKey string) (*kind5CacheEntry, bool) {
+	r.kind5CacheMu.RLock()
+	defer r.kind5CacheMu.RUnlock()
 
+	entry, exists := r.kind5Cache[cacheKey]
+	if !exists {
+		return nil, false
+	}
+
+	// Check if the entry is still valid (not expired)
+	if time.Since(entry.timestamp) >= r.kind5CacheDelay {
+		return nil, false
+	}
+
+	return entry, true
+}
+
+// removeKind5CacheEntry safely removes a cache entry
+func (r *RelayStore) removeKind5CacheEntry(cacheKey string) {
+	r.kind5CacheMu.Lock()
+	defer r.kind5CacheMu.Unlock()
+	delete(r.kind5Cache, cacheKey)
+}
+
+// addKind5CacheEntry safely adds a new cache entry
+func (r *RelayStore) addKind5CacheEntry(cacheKey string, filter nostr.Filter) {
 	r.kind5CacheMu.Lock()
 	defer r.kind5CacheMu.Unlock()
 
-	// Check if we have a cached entry
-	if entry, exists := r.kind5Cache[cacheKey]; exists {
-		// Check if the entry is still valid (not expired)
-		if time.Since(entry.timestamp) < r.kind5CacheDelay {
-			if r.Verbose {
-				log.Printf("[relaystore][DEBUG] kind 5 request already cached: %s", cacheKey)
-			}
-			return true
-		} else {
-			// Entry expired, remove it
-			delete(r.kind5Cache, cacheKey)
-		}
-	}
-
-	// No cached entry or expired, create new one
 	blockedEvents := parseKind5BlockedEvents(filter)
 	entry := &kind5CacheEntry{
 		filter:        filter,
@@ -1026,11 +1034,31 @@ func (r *RelayStore) handleKind5Caching(filter nostr.Filter) bool {
 		blockedEvents: blockedEvents,
 	}
 	r.kind5Cache[cacheKey] = entry
+}
+
+// handleKind5Caching manages the caching of kind 5 deletion requests
+func (r *RelayStore) handleKind5Caching(filter nostr.Filter) bool {
+	cacheKey := generateKind5CacheKey(filter)
+
+	// Check if we have a valid cached entry
+	if _, valid := r.getKind5CacheEntry(cacheKey); valid {
+		if r.Verbose {
+			log.Printf("[relaystore][DEBUG] kind 5 request already cached: %s", cacheKey)
+		}
+		return true
+	}
+
+	// Entry doesn't exist or expired, remove it if it exists
+	r.removeKind5CacheEntry(cacheKey)
+
+	// Create new cache entry
+	r.addKind5CacheEntry(cacheKey, filter)
 
 	// Start a goroutine to handle the delayed cleanup
 	go r.cleanupKind5Cache(cacheKey)
 
 	if r.Verbose {
+		blockedEvents := parseKind5BlockedEvents(filter)
 		log.Printf("[relaystore][DEBUG] kind 5 request cached with blocked events: %v", blockedEvents)
 	}
 
@@ -1042,11 +1070,7 @@ func (r *RelayStore) cleanupKind5Cache(cacheKey string) {
 	// Wait for the cache delay
 	time.Sleep(r.kind5CacheDelay)
 
-	r.kind5CacheMu.Lock()
-	defer r.kind5CacheMu.Unlock()
-
-	// Remove the cache entry after delay
-	delete(r.kind5Cache, cacheKey)
+	r.removeKind5CacheEntry(cacheKey)
 
 	if r.Verbose {
 		log.Printf("[relaystore][DEBUG] kind 5 cache entry cleaned up: %s", cacheKey)
