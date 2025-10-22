@@ -329,10 +329,7 @@ func (r *RelayStore) Init() error {
 		}(u)
 	}
 
-	// setup query pool: if no queryUrls provided, use sensible defaults
-	if len(r.queryUrls) == 0 {
-		r.queryUrls = []string{"wss://wot.girino.org", "wss://nostr.girino.org"}
-	}
+	// setup query pool: create pool even if no queryUrls provided
 	// create a SimplePool for queries
 	r.pool = nostr.NewSimplePool(context.Background(), nostr.WithPenaltyBox())
 

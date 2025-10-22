@@ -69,10 +69,11 @@ func NewMirrorManager(queryUrls []string) *MirrorManager {
 
 // Init initializes the mirror manager
 func (m *MirrorManager) Init() error {
-	// setup query pool: if no queryUrls provided, use sensible defaults
+	// No default query remotes - must be provided
 	if len(m.queryUrls) == 0 {
-		m.queryUrls = []string{"wss://wot.girino.org", "wss://nostr.girino.org"}
+		return fmt.Errorf("no query remotes provided - mirror manager requires query remotes")
 	}
+
 	// create a SimplePool for queries
 	m.pool = nostr.NewSimplePool(context.Background(), nostr.WithPenaltyBox())
 

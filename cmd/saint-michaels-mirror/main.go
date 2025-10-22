@@ -84,7 +84,7 @@ func main() {
 		// do not log secrets
 	}
 
-	// initialize relaystore with provided remotes or default
+	// initialize relaystore with provided remotes or fail
 	var rs *relaystore.RelayStore
 	if len(cfg.PublishRemotes) > 0 || len(cfg.QueryRemotes) > 0 {
 		if len(cfg.QueryRemotes) > 0 {
@@ -93,8 +93,8 @@ func main() {
 			rs = relaystore.NewWithRelayKey(cfg.PublishRemotes, decodedSec)
 		}
 	} else {
-		defaultRemote := "ws://localhost:10547"
-		rs = relaystore.NewWithRelayKey([]string{defaultRemote}, decodedSec)
+		// No publish remotes provided - init with empty publish remotes
+		rs = relaystore.NewWithRelayKey([]string{}, decodedSec)
 	}
 	if cfg.Verbose {
 		rs.Verbose = true
@@ -103,19 +103,19 @@ func main() {
 		log.Fatalf("initializing relaystore: %v", err)
 	}
 
-	// initialize mirror manager with query remotes
+	// initialize mirror manager with query remotes or fail
 	var mm *mirror.MirrorManager
 	if len(cfg.QueryRemotes) > 0 {
 		mm = mirror.NewMirrorManager(cfg.QueryRemotes)
+		if cfg.Verbose {
+			mm.Verbose = true
+		}
+		if err := mm.Init(); err != nil {
+			log.Fatalf("initializing mirror manager: %v", err)
+		}
 	} else {
-		// use default query remotes for mirroring
-		mm = mirror.NewMirrorManager([]string{"wss://wot.girino.org", "wss://nostr.girino.org"})
-	}
-	if cfg.Verbose {
-		mm.Verbose = true
-	}
-	if err := mm.Init(); err != nil {
-		log.Fatalf("initializing mirror manager: %v", err)
+		// No query remotes provided - fail
+		log.Fatalf("no query remotes provided - mirror manager requires query remotes")
 	}
 
 	// Ensure some canonical NIP-11 fields are set on the relay Info. ApplyToRelay
