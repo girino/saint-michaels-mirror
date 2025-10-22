@@ -109,7 +109,7 @@ func main() {
 		r.Info = &nip11.RelayInformationDocument{}
 	}
 	if r.Info.Software == "" {
-		r.Info.Software = "https://github.com/girino/saint-michaels-mirror"
+		r.Info.Software = "https://gitworkshop.dev/npub18lav8fkgt8424rxamvk8qq4xuy9n8mltjtgztv2w44hc5tt9vets0hcfsz/relay.ngit.dev/saint-michaels-mirror"
 	}
 	if r.Info.Version == "" {
 		r.Info.Version = Version

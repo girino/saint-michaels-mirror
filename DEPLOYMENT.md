@@ -308,8 +308,9 @@ ss -tulpn | grep :3337
 
 ## Support
 
-- **Documentation**: [GitHub Repository](https://github.com/girino/saint-michaels-mirror)
-- **Issues**: [GitHub Issues](https://github.com/girino/saint-michaels-mirror/issues)
+- **Repository**: https://gitworkshop.dev/npub18lav8fkgt8424rxamvk8qq4xuy9n8mltjtgztv2w44hc5tt9vets0hcfsz/relay.ngit.dev/saint-michaels-mirror
+- **Clone URL**: nostr://npub18lav8fkgt8424rxamvk8qq4xuy9n8mltjtgztv2w44hc5tt9vets0hcfsz/relay.ngit.dev/saint-michaels-mirror
+- **Releases**: [GitHub Releases](https://github.com/girino/saint-michaels-mirror/releases) (binaries and Docker images)
 - **Community**: Join Nostr community discussions
 
 ---

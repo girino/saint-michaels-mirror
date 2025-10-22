@@ -30,7 +30,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/girino/saint-michaels-mirror.git
+git clone nostr://npub18lav8fkgt8424rxamvk8qq4xuy9n8mltjtgztv2w44hc5tt9vets0hcfsz/relay.ngit.dev/saint-michaels-mirror
 cd saint-michaels-mirror
 
 # Configure your relay
@@ -203,7 +203,7 @@ The relay implements a spiritual metaphor through technical architecture:
 
 ```bash
 # Clone the repository
-git clone https://github.com/girino/saint-michaels-mirror.git
+git clone nostr://npub18lav8fkgt8424rxamvk8qq4xuy9n8mltjtgztv2w44hc5tt9vets0hcfsz/relay.ngit.dev/saint-michaels-mirror
 cd saint-michaels-mirror
 
 # Build the binary
@@ -291,9 +291,9 @@ This project is licensed under **Girino's Anarchist License (GAL)**.
 
 ## 📞 Support
 
-- **Documentation**: [GitHub Repository](https://github.com/girino/saint-michaels-mirror)
-- **Issues**: [GitHub Issues](https://github.com/girino/saint-michaels-mirror/issues)
-- **Releases**: [GitHub Releases](https://github.com/girino/saint-michaels-mirror/releases)
+- **Repository**: https://gitworkshop.dev/npub18lav8fkgt8424rxamvk8qq4xuy9n8mltjtgztv2w44hc5tt9vets0hcfsz/relay.ngit.dev/saint-michaels-mirror
+- **Clone URL**: nostr://npub18lav8fkgt8424rxamvk8qq4xuy9n8mltjtgztv2w44hc5tt9vets0hcfsz/relay.ngit.dev/saint-michaels-mirror
+- **Releases**: [GitHub Releases](https://github.com/girino/saint-michaels-mirror/releases) (binaries and Docker images)
 
 ## 🙏 Acknowledgments
 
