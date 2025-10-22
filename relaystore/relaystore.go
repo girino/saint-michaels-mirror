@@ -15,7 +15,6 @@ import (
 	"log"
 	"net/http"
 	neturl "net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -943,30 +942,27 @@ func parseKind5BlockedEvents(filter nostr.Filter) map[string]bool {
 
 // isBlockedEvent checks if a request should be blocked based on cached kind 5 deletion requests
 func (r *RelayStore) isBlockedEvent(filter nostr.Filter) bool {
+	// Only check if this is a single-kind, single-author request
+	if len(filter.Kinds) != 1 || len(filter.Authors) != 1 {
+		return false
+	}
+
+	kind := filter.Kinds[0]
+	author := filter.Authors[0]
+
+	// Create a key to check if this kind:author combination is blocked
+	blockedKey := fmt.Sprintf("%d:%s", kind, author)
+
 	r.kind5CacheMu.RLock()
 	defer r.kind5CacheMu.RUnlock()
 
-	// Check if this request matches any blocked events
+	// Check if this kind:author combination is blocked by any cached kind 5 request
 	for _, entry := range r.kind5Cache {
 		// Check if entry is still valid (not expired)
 		if time.Since(entry.timestamp) < r.kind5CacheDelay {
-			// Check if this filter matches any blocked events
-			for blockedKey := range entry.blockedEvents {
-				parts := strings.Split(blockedKey, ":")
-				if len(parts) == 2 {
-					blockedKind := parts[0]
-					blockedAuthor := parts[1]
-
-					// Check if this request matches the blocked kind and author
-					if len(filter.Kinds) == 1 {
-						// Convert blockedKind string to int for comparison
-						if blockedKindInt, err := strconv.Atoi(blockedKind); err == nil && filter.Kinds[0] == blockedKindInt {
-							if len(filter.Authors) == 1 && filter.Authors[0] == blockedAuthor {
-								return true
-							}
-						}
-					}
-				}
+			// Check if this request matches any blocked events
+			if entry.blockedEvents[blockedKey] {
+				return true
 			}
 		}
 	}
