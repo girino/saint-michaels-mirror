@@ -84,17 +84,20 @@ func main() {
 		// do not log secrets
 	}
 
-	// initialize relaystore with provided remotes or fail
+	// initialize relaystore with mandatory query relays and optional publish relays
 	var rs *relaystore.RelayStore
-	if len(cfg.PublishRemotes) > 0 || len(cfg.QueryRemotes) > 0 {
-		if len(cfg.QueryRemotes) > 0 {
-			rs = relaystore.NewWithQueryRemotesAndRelayKey(cfg.PublishRemotes, cfg.QueryRemotes, decodedSec)
+	if len(cfg.QueryRemotes) > 0 {
+		// Query remotes are mandatory - use them
+		if len(cfg.PublishRemotes) > 0 {
+			// Both query and publish remotes provided
+			rs = relaystore.NewWithRelayKey(cfg.QueryRemotes, decodedSec, cfg.PublishRemotes...)
 		} else {
-			rs = relaystore.NewWithRelayKey(cfg.PublishRemotes, decodedSec)
+			// Only query remotes provided (query-only mode)
+			rs = relaystore.NewWithRelayKey(cfg.QueryRemotes, decodedSec)
 		}
 	} else {
-		// No publish remotes provided - init with empty publish remotes
-		rs = relaystore.NewWithRelayKey([]string{}, decodedSec)
+		// No query remotes provided - fail
+		log.Fatalf("no query remotes provided - relaystore requires query remotes")
 	}
 	if cfg.Verbose {
 		rs.Verbose = true

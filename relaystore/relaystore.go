@@ -264,15 +264,20 @@ func (r *RelayStore) Stats() Stats {
 	}
 }
 
-// New creates a RelayStore that will forward to the provided comma-separated URLs.
-func New(urls []string) *RelayStore {
-	return NewWithRelayKey(urls, "")
+// New creates a RelayStore with mandatory query relays and optional publish relays.
+func New(queryUrls []string, publishUrls ...string) *RelayStore {
+	return NewWithRelayKey(queryUrls, "", publishUrls...)
 }
 
-// NewWithRelayKey creates a RelayStore that will forward to the provided URLs with optional relay authentication key.
-func NewWithRelayKey(urls []string, relaySecKey string) *RelayStore {
+// NewWithRelayKey creates a RelayStore with mandatory query relays, optional publish relays, and optional relay authentication key.
+func NewWithRelayKey(queryUrls []string, relaySecKey string, publishUrls ...string) *RelayStore {
+	if len(queryUrls) == 0 {
+		panic("query relays are mandatory - at least one query relay must be provided")
+	}
+
 	rs := &RelayStore{
-		urls:                   urls,
+		urls:                   publishUrls,
+		queryUrls:              queryUrls,
 		relays:                 make(map[string]*nostr.Relay),
 		publishTimeout:         7 * time.Second,
 		maxConsecutiveFailures: 10, // Default threshold: 10 consecutive failures
@@ -282,21 +287,15 @@ func NewWithRelayKey(urls []string, relaySecKey string) *RelayStore {
 }
 
 // NewWithQueryRemotes creates a RelayStore with separate publish remotes and query remotes.
+// Deprecated: Use New() instead with query relays as first parameter and publish relays as variadic.
 func NewWithQueryRemotes(publish []string, query []string) *RelayStore {
-	return NewWithQueryRemotesAndRelayKey(publish, query, "")
+	return NewWithRelayKey(query, "", publish...)
 }
 
 // NewWithQueryRemotesAndRelayKey creates a RelayStore with separate publish remotes and query remotes, with optional relay authentication key.
+// Deprecated: Use NewWithRelayKey() instead with query relays as first parameter and publish relays as variadic.
 func NewWithQueryRemotesAndRelayKey(publish []string, query []string, relaySecKey string) *RelayStore {
-	rs := &RelayStore{
-		urls:                   publish,
-		queryUrls:              query,
-		relays:                 make(map[string]*nostr.Relay),
-		publishTimeout:         7 * time.Second,
-		maxConsecutiveFailures: 10, // Default threshold: 10 consecutive failures
-		relaySecKey:            relaySecKey,
-	}
-	return rs
+	return NewWithRelayKey(query, relaySecKey, publish...)
 }
 
 func (r *RelayStore) Init() error {
