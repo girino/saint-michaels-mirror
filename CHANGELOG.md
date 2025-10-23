@@ -2,6 +2,30 @@
 
 Instruction for AI agents editing this file: prioritize human-friendly, user-facing functionality; de-emphasize CI/CD and infrastructure-only changes.
 
+## v1.2.0 — 2025-01-22
+
+### 🚀 Performance & Optimization
+- **Internal query filtering**: Implemented intelligent caching mechanism for internal query requests to batch related operations and reduce upstream relay load.
+- **Efficient blocked event lookup**: Optimized blocked event detection with O(1) map lookup instead of O(n) iteration for significantly improved performance.
+- **Optimized cache locking**: Reduced lock contention with dedicated helper methods that minimize critical section duration during cache operations.
+- **Smart internal request detection**: Enhanced detection of internal requests using since filter checks to prevent incorrect classification of legitimate client requests.
+
+### 🔧 Architecture & Code Quality
+- **Separated mirroring functionality**: Extracted mirroring logic into dedicated `mirror` package for better modularity and reusability.
+- **Simplified constructor API**: Streamlined RelayStore constructor with intuitive parameter order (query relays mandatory, publish relays optional).
+- **Removed default configurations**: Require explicit configuration for all components to prevent unexpected behavior.
+- **Enhanced internal request handling**: Improved detection and handling of internal khatru requests to prevent unnecessary upstream forwarding.
+
+### 🛡️ Reliability & Error Handling
+- **Internal query blocking**: Implemented proper blocking mechanism for internal query requests with 3-second cache timeout.
+- **Internal request filtering**: Added comprehensive filtering to prevent internal khatru operations from being forwarded to upstream relays.
+- **Improved cache management**: Enhanced cache cleanup and management with better error handling and resource optimization.
+
+### 📊 Technical Improvements
+- **Better debugging**: Enhanced debug logging for internal requests and blocked events for improved troubleshooting.
+- **Cleaner API**: Removed deprecated constructors and simplified the public API surface.
+- **Optimized data structures**: Replaced complex cache entries with efficient map-based storage for blocked events.
+
 ## v1.1.0 — 2025-01-21
 
 ### 🔐 Authentication & Security
