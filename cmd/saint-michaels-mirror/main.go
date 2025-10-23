@@ -38,10 +38,7 @@ func main() {
 	// create a basic khatru relay instance
 	r := khatru.NewRelay()
 
-	// apply khatru's sane default anti-spam policies
-	policies.ApplySaneDefaults(r)
-
-	// Add additional connection and filter policies for upstream relay protection
+	// Apply custom connection and filter policies for upstream relay protection
 	r.RejectFilter = append(r.RejectFilter,
 		// Prevent empty filters that could be used for scanning
 		policies.NoEmptyFilters,
@@ -52,11 +49,14 @@ func main() {
 		// Anti-sync bot protection - require author for kind:1 queries
 		policies.AntiSyncBots,
 
-		// More restrictive filter rate limiting to prevent upstream overload
+		// Prevent complex filters that could be expensive
+		policies.NoComplexFilters,
+
+		// Restrictive filter rate limiting to prevent upstream overload
 		policies.FilterIPRateLimiter(10, time.Minute, 50), // 10 filter requests per minute, burst of 50
 	)
 
-	// Enhance connection rate limiting for better upstream protection
+	// Strict connection rate limiting to prevent bot abuse
 	r.RejectConnection = append(r.RejectConnection,
 		// Strict connection limiting to prevent bot abuse
 		policies.ConnectionRateLimiter(1, time.Minute*2, 5), // 1 connection per 2 minutes, burst of 5
