@@ -2,9 +2,7 @@ name: Test
 
 on:
   push:
-    branches: [ main ]
   pull_request:
-    branches: [ main ]
 
 jobs:
   test:
@@ -44,11 +42,38 @@ jobs:
         # Build for the native architecture of the runner
         docker build -t saint-michaels-mirror:test .
 
-    - name: Test Docker run
+    - name: Start Docker container
       run: |
-        # Test the Docker container runs correctly
-        docker run -d --name test-relay -p 3338:3337 saint-michaels-mirror:test
+        # Start the relay container for testing
+        docker run -d --name test-relay -p 3338:3337 \
+          -e RELAY_NAME="Test Relay" \
+          -e RELAY_DESCRIPTION="Test relay for CI" \
+          -e QUERY_REMOTES="wss://haven.girino.org" \
+          -e PUBLISH_REMOTES="wss://haven.girino.org" \
+          -e VERBOSE=1 \
+          saint-michaels-mirror:test
         sleep 5
-        curl -f http://localhost:3338/.well-known/nostr.json || exit 1
+
+    - name: Test HTTP health endpoint
+      run: |
+        # Test the health endpoint
+        curl -f http://localhost:3338/api/v1/health || exit 1
+
+    - name: Test Nostr protocol with nak
+      run: |
+        # Install nak for Nostr protocol testing
+        go install github.com/fiatjaf/nak@latest
+        
+        # Test Nostr protocol with a simple request
+        echo "=== Testing Nostr protocol with nak ==="
+        $HOME/go/bin/nak req -k 1 -limit 1 ws://localhost:3338 || exit 1
+
+    - name: Clean up Docker container
+      if: always()
+      run: |
+        # Print container logs for debugging
+        echo "=== Docker container logs ==="
+        docker logs test-relay
+        # Clean up
         docker stop test-relay
         docker rm test-relay
