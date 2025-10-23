@@ -8,7 +8,6 @@
 package main
 
 import (
-	"context"
 	"encoding/hex"
 	"encoding/json"
 	"html/template"
@@ -21,6 +20,7 @@ import (
 	"time"
 
 	"github.com/fiatjaf/khatru"
+	"github.com/fiatjaf/khatru/policies"
 	"github.com/girino/saint-michaels-mirror/mirror"
 	"github.com/girino/saint-michaels-mirror/relaystore"
 	"github.com/nbd-wtf/go-nostr"
@@ -37,6 +37,9 @@ func main() {
 
 	// create a basic khatru relay instance
 	r := khatru.NewRelay()
+
+	// apply khatru's sane default anti-spam policies
+	policies.ApplySaneDefaults(r)
 
 	// apply NIP-11 fields from config
 	ApplyToRelay(r, cfg)
@@ -175,52 +178,6 @@ func main() {
 	r.StoreEvent = append(r.StoreEvent, rs.SaveEvent)
 	r.QueryEvents = append(r.QueryEvents, rs.QueryEvents)
 	r.CountEvents = append(r.CountEvents, rs.CountEvents)
-
-	// Add khatru anti-spam policies using RejectEvent hook
-	r.RejectEvent = append(r.RejectEvent, func(ctx context.Context, event *nostr.Event) (reject bool, msg string) {
-		// Policy 1: Reject events that are too large (>32KB)
-		if len(event.Content) > 32768 {
-			return true, "blocked: event content too large"
-		}
-
-		// Policy 2: Reject events with excessive tags (>100 tags)
-		if len(event.Tags) > 100 {
-			return true, "blocked: too many tags"
-		}
-
-		// Policy 3: Reject events with malformed timestamps
-		now := nostr.Timestamp(time.Now().Unix())
-		if event.CreatedAt > now+3600 { // More than 1 hour in future
-			return true, "blocked: event timestamp too far in future"
-		}
-		if event.CreatedAt < now-31536000 { // More than 1 year in past
-			return true, "blocked: event timestamp too far in past"
-		}
-
-		// Policy 4: Reject events with suspicious kind values
-		if event.Kind < 0 || event.Kind > 30000 {
-			return true, "blocked: invalid event kind"
-		}
-
-		// Policy 5: Reject events with empty content but many tags (potential spam)
-		if len(strings.TrimSpace(event.Content)) == 0 && len(event.Tags) > 20 {
-			return true, "blocked: empty content with excessive tags"
-		}
-
-		// Allow the event
-		return false, ""
-	})
-
-	// Add connection-level anti-spam policies using RejectConnection hook
-	r.RejectConnection = append(r.RejectConnection, func(r *http.Request) bool {
-		// Basic connection validation - reject obviously invalid requests
-		if r == nil || r.RemoteAddr == "" {
-			return true
-		}
-
-		// Allow all other connections
-		return false
-	})
 
 	// start event mirroring from query relays
 	if err := mm.StartMirroring(r); err != nil {
