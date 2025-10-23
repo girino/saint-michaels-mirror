@@ -8,6 +8,7 @@
 package main
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"html/template"
@@ -174,6 +175,31 @@ func main() {
 	r.StoreEvent = append(r.StoreEvent, rs.SaveEvent)
 	r.QueryEvents = append(r.QueryEvents, rs.QueryEvents)
 	r.CountEvents = append(r.CountEvents, rs.CountEvents)
+
+	// Add basic anti-spam policies using khatru's built-in capabilities
+	r.RejectEvent = append(r.RejectEvent, func(ctx context.Context, event *nostr.Event) (reject bool, msg string) {
+		// Reject events that are too large (>32KB)
+		if len(event.Content) > 32768 {
+			return true, "blocked: event content too large"
+		}
+
+		// Reject events with excessive tags (>100 tags)
+		if len(event.Tags) > 100 {
+			return true, "blocked: too many tags"
+		}
+
+		// Reject events with malformed timestamps
+		now := nostr.Timestamp(time.Now().Unix())
+		if event.CreatedAt > now+3600 { // More than 1 hour in future
+			return true, "blocked: event timestamp too far in future"
+		}
+		if event.CreatedAt < now-31536000 { // More than 1 year in past
+			return true, "blocked: event timestamp too far in past"
+		}
+
+		// Allow the event
+		return false, ""
+	})
 
 	// start event mirroring from query relays
 	if err := mm.StartMirroring(r); err != nil {
@@ -464,3 +490,4 @@ func ensureSupportedNips(r *khatru.Relay, nips []int) {
 		}
 	}
 }
+
