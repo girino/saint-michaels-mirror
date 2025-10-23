@@ -76,15 +76,15 @@ function populateStats(data) {
   document.getElementById('relay-count-requests').textContent = data.relay.count_requests;
 
   // Mirroring operations
-  document.getElementById('relay-mirrored-events').textContent = data.relay.mirrored_events;
-  document.getElementById('relay-mirror-attempts').textContent = data.relay.mirror_attempts;
-  document.getElementById('relay-mirror-successes').textContent = data.relay.mirror_successes;
-  document.getElementById('relay-mirror-failures').textContent = data.relay.mirror_failures;
+  document.getElementById('relay-mirrored-events').textContent = data.mirror.mirrored_events;
+  document.getElementById('relay-mirror-attempts').textContent = data.mirror.mirror_attempts;
+  document.getElementById('relay-mirror-successes').textContent = data.mirror.mirror_successes;
+  document.getElementById('relay-mirror-failures').textContent = data.mirror.mirror_failures;
 
   // Relay health
-  document.getElementById('relay-live-count').textContent = data.relay.live_relays;
-  document.getElementById('relay-dead-count').textContent = data.relay.dead_relays;
-  document.getElementById('relay-total-count').textContent = data.relay.live_relays + data.relay.dead_relays;
+  document.getElementById('relay-live-count').textContent = data.mirror.live_relays;
+  document.getElementById('relay-dead-count').textContent = data.mirror.dead_relays;
+  document.getElementById('relay-total-count').textContent = data.mirror.live_relays + data.mirror.dead_relays;
 
   // Health status
   const overallHealthEl = document.getElementById('health-overall');
@@ -100,12 +100,12 @@ function populateStats(data) {
   queryHealthEl.className = `health-indicator ${getHealthClass(data.relay.query_health_state)}`;
 
   const mirrorHealthEl = document.getElementById('health-mirror');
-  mirrorHealthEl.textContent = data.relay.mirror_health_state;
-  mirrorHealthEl.className = `health-indicator ${getHealthClass(data.relay.mirror_health_state)}`;
+  mirrorHealthEl.textContent = data.mirror.mirror_health_state;
+  mirrorHealthEl.className = `health-indicator ${getHealthClass(data.mirror.mirror_health_state)}`;
 
   document.getElementById('health-publish-failures').textContent = data.relay.consecutive_publish_failures;
   document.getElementById('health-query-failures').textContent = data.relay.consecutive_query_failures;
-  document.getElementById('health-mirror-failures').textContent = data.relay.consecutive_mirror_failures;
+  document.getElementById('health-mirror-failures').textContent = data.mirror.consecutive_mirror_failures;
 
   // Performance
   document.getElementById('perf-publish-avg').textContent = formatDuration(data.relay.average_publish_duration_ms);
