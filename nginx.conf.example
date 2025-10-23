@@ -6,6 +6,12 @@
 #
 # Example nginx configuration for Espelho de São Miguel Nostr relay
 # This configuration handles WebSocket connections and HTTP requests
+# 
+# Cloudflare Proxy Setup:
+# - Configured to use real client IP from Cloudflare headers
+# - Rate limiting based on real IP, not Cloudflare IP
+# - Separate logging with Cloudflare metadata
+# - Requires Cloudflare proxy to be enabled (orange cloud)
 
 # Upstream backend for the relay
 upstream relay_backend {
@@ -13,9 +19,27 @@ upstream relay_backend {
     keepalive 32;
 }
 
-# Rate limiting zones
-limit_req_zone $binary_remote_addr zone=relay_limit:10m rate=10r/s;
-limit_req_zone $binary_remote_addr zone=api_limit:10m rate=5r/s;
+# Rate limiting zones - use real IP from Cloudflare
+map $http_cf_connecting_ip $real_ip {
+    "" $remote_addr;
+    default $http_cf_connecting_ip;
+}
+
+limit_req_zone $real_ip zone=relay_limit:10m rate=10r/s;
+limit_req_zone $real_ip zone=api_limit:10m rate=5r/s;
+
+# Log format for Cloudflare proxy with real IP
+log_format cloudflare '$remote_addr - $remote_user [$time_local] '
+                      '"$request" $status $body_bytes_sent '
+                      '"$http_referer" "$http_user_agent" '
+                      'cf_ip="$http_cf_connecting_ip" '
+                      'real_ip="$http_x_forwarded_for" '
+                      'cf_ray="$http_cf_ray" '
+                      'cf_country="$http_cf_ipcountry"';
+
+# Access log for relay traffic
+access_log /var/log/nginx/saint_michaels_access.log cloudflare;
+error_log /var/log/nginx/saint_michaels_error.log warn;
 
 # Main server block
 server {
@@ -55,7 +79,7 @@ server {
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";
     proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Real-IP $real_ip;  # Use real IP from Cloudflare
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
     
