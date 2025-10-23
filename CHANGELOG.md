@@ -2,6 +2,11 @@
 
 Instruction for AI agents editing this file: prioritize human-friendly, user-facing functionality; de-emphasize CI/CD and infrastructure-only changes.
 
+## v1.2.1 — 2025-01-22
+
+### 🐛 Bug Fixes
+- **Fixed MirrorManager statistics display**: Corrected JavaScript to properly access mirror statistics from the correct data structure, fixing missing mirror statistics and health status on the web interface.
+
 ## v1.2.0 — 2025-01-22
 
 ### 🚀 Performance & Optimization
