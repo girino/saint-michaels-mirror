@@ -41,6 +41,33 @@ func main() {
 	// apply khatru's sane default anti-spam policies
 	policies.ApplySaneDefaults(r)
 
+	// Add additional anti-spam policies for enhanced protection
+	r.RejectEvent = append(r.RejectEvent,
+		// Timestamp validation - reject events too far in future/past
+		policies.PreventTimestampsInTheFuture(time.Hour),     // Max 1 hour in future
+		policies.PreventTimestampsInThePast(time.Hour*24*30), // Max 30 days in past
+		
+		// Tag size limits - prevent large tag values
+		policies.PreventLargeTags(1024), // Max 1024 chars per tag value
+		
+		// Limit indexable tags - prevent tag spam
+		policies.PreventTooManyIndexableTags(50, nil, nil), // Max 50 single-char tags
+		
+		// Kind validation - basic validation for common kinds
+		policies.ValidateKind,
+	)
+
+	r.RejectFilter = append(r.RejectFilter,
+		// Prevent empty filters that could be used for scanning
+		policies.NoEmptyFilters,
+		
+		// Prevent search queries that could be expensive
+		policies.NoSearchQueries,
+		
+		// Anti-sync bot protection - require author for kind:1 queries
+		policies.AntiSyncBots,
+	)
+
 	// apply NIP-11 fields from config
 	ApplyToRelay(r, cfg)
 
