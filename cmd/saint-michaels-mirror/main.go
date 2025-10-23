@@ -58,8 +58,8 @@ func main() {
 
 	// Enhance connection rate limiting for better upstream protection
 	r.RejectConnection = append(r.RejectConnection,
-		// More aggressive connection limiting to prevent upstream overload
-		policies.ConnectionRateLimiter(1, time.Minute*2, 50), // 1 connection per 2 minutes, burst of 50
+		// Strict connection limiting to prevent bot abuse
+		policies.ConnectionRateLimiter(1, time.Minute*2, 5), // 1 connection per 2 minutes, burst of 5
 	)
 
 	// apply NIP-11 fields from config
