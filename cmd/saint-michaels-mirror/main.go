@@ -38,30 +38,6 @@ func main() {
 	// create a basic khatru relay instance
 	r := khatru.NewRelay()
 
-	// Apply custom connection and filter policies for upstream relay protection
-	r.RejectFilter = append(r.RejectFilter,
-		// Prevent empty filters that could be used for scanning
-		policies.NoEmptyFilters,
-
-		// Prevent search queries that could be expensive
-		policies.NoSearchQueries,
-
-		// Anti-sync bot protection - require author for kind:1 queries
-		policies.AntiSyncBots,
-
-		// Prevent complex filters that could be expensive
-		policies.NoComplexFilters,
-
-		// Restrictive filter rate limiting to prevent upstream overload
-		policies.FilterIPRateLimiter(10, time.Minute, 50), // 10 filter requests per minute, burst of 50
-	)
-
-	// Strict connection rate limiting to prevent bot abuse
-	r.RejectConnection = append(r.RejectConnection,
-		// Strict connection limiting to prevent bot abuse
-		policies.ConnectionRateLimiter(1, time.Minute*2, 5), // 1 connection per 2 minutes, burst of 5
-	)
-
 	// apply NIP-11 fields from config
 	ApplyToRelay(r, cfg)
 
@@ -194,6 +170,30 @@ func main() {
 			}
 		}
 	}
+
+	// Apply custom connection and filter policies for upstream relay protection
+	r.RejectFilter = append(r.RejectFilter,
+		// Prevent empty filters that could be used for scanning
+		policies.NoEmptyFilters,
+
+		// Prevent search queries that could be expensive
+		policies.NoSearchQueries,
+
+		// Anti-sync bot protection - require author for kind:1 queries
+		policies.AntiSyncBots,
+
+		// Prevent complex filters that could be expensive
+		policies.NoComplexFilters,
+
+		// Restrictive filter rate limiting to prevent upstream overload
+		policies.FilterIPRateLimiter(10, time.Minute, 50), // 10 filter requests per minute, burst of 50
+	)
+
+	// Strict connection rate limiting to prevent bot abuse
+	r.RejectConnection = append(r.RejectConnection,
+		// Strict connection limiting to prevent bot abuse
+		policies.ConnectionRateLimiter(1, time.Minute*2, 5), // 1 connection per 2 minutes, burst of 5
+	)
 
 	// hook store functions into relay
 	r.StoreEvent = append(r.StoreEvent, rs.SaveEvent)
