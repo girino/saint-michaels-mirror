@@ -8,6 +8,7 @@
 package main
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"html/template"
@@ -173,26 +174,26 @@ func main() {
 
 	// Apply custom connection and filter policies for upstream relay protection
 	r.RejectFilter = append(r.RejectFilter,
-		// Prevent empty filters that could be used for scanning
-		policies.NoEmptyFilters,
-
-		// Prevent search queries that could be expensive
-		policies.NoSearchQueries,
-
-		// Anti-sync bot protection - require author for kind:1 queries
-		policies.AntiSyncBots,
-
-		// Prevent complex filters that could be expensive
-		policies.NoComplexFilters,
-
 		// Restrictive filter rate limiting to prevent upstream overload
-		policies.FilterIPRateLimiter(10, time.Minute, 50), // 10 filter requests per minute, burst of 50
+		func(ctx context.Context, filter nostr.Filter) (reject bool, msg string) {
+			reject, msg = policies.FilterIPRateLimiter(5, time.Minute, 20)(ctx, filter)
+			if reject {
+				log.Printf("filter IP rate limiter: %v, %s, from: %s", reject, msg, khatru.GetIP(ctx))
+			}
+			return reject, msg
+		},
 	)
 
 	// Strict connection rate limiting to prevent bot abuse
 	r.RejectConnection = append(r.RejectConnection,
 		// Strict connection limiting to prevent bot abuse
-		policies.ConnectionRateLimiter(1, time.Minute*2, 5), // 1 connection per 2 minutes, burst of 5
+		func(req *http.Request) (reject bool) {
+			reject = policies.ConnectionRateLimiter(1, time.Minute*2, 5)(req)
+			if reject {
+				log.Printf("connection rate limiter: %v, from: %s", reject, khatru.GetIPFromRequest(req))
+			}
+			return reject
+		},
 	)
 
 	// hook store functions into relay
