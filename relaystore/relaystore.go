@@ -508,44 +508,35 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 		return ch, nil
 	}
 
-	// Special-case: adding.go performs a deletion check by calling QueryEvents
-	// with the literal: nostr.Filter{Kinds: []int{5}, Tags: nostr.TagMap{"#e": []string{evt.ID}}}
-	// That call does NOT set khatru's internalCallKey, but we still want to
-	// short-circuit that exact shape so deletion checks aren't forwarded to remotes.
-	// Only apply the adding.go kind=5/#e short-circuit when there is no
-	// subscription id or other websocket context value set at index 1. If a
-	// value exists at index 1 (khatru uses that slot for subscription id),
-	// this is likely a real client subscription and should not be treated as
-	// the internal deletion-check.
-	// require: no ctx[1] value (subscription id). We don't check for a
-	// websocket connection here because AddEvent and other internal callers
-	// may execute with a connection in-context; checking ctx[1] is the
-	// specific guard requested.
-	if isAddingKind5Filter(filter) && ctx.Value(1) == nil {
-		atomic.AddInt64(&r.queryInternal, 1)
-		if r.Verbose {
-			log.Printf("[relaystore][DEBUG] internal query short-circuited (adding.go kind=5 #e, no ctx[1]) filter=%+v", filter)
+	debugMsg := ""
+	if ctx.Value(1) == nil {
+		// fist case is looking for deletion requests of regular events
+		if isKind5ForRegularEvents(filter) {
+			debugMsg = fmt.Sprintf("[relaystore][DEBUG] internal query short-circuited (adding.go kind=5 #e, no ctx[1]) filter=%+v", filter)
+		} else
+		// now checks for deletion requests of replaceable events
+		if isKind5ForReplaceableEvents(filter) {
+			debugMsg = fmt.Sprintf("[relaystore][DEBUG] kind 5 deletion request detected, caching: %+v", filter)
+			r.handleAddressableEventsCaching(filter)
+		} else
+		// now check for cached blocked events
+		if r.isBlockedreplaceableEvent(filter) {
+			debugMsg = fmt.Sprintf("[relaystore][DEBUG] request blocked from cache: %+v", filter)
 		}
-		ch := make(chan *nostr.Event)
-		close(ch)
-		return ch, nil
-	}
-
-	// Check for kind 5 deletion requests that should be cached
-	if isKind5DeletionRequest(filter) && ctx.Value(1) == nil {
-		if r.handleKind5Caching(filter) {
-			atomic.AddInt64(&r.queryInternal, 1)
-			ch := make(chan *nostr.Event)
-			close(ch)
-			return ch, nil
+		if debugMsg == "" {
+			log.Printf("=======================================================================")
+			log.Printf("[relaystore][WARN] Possible internal request not blocked: %+v", filter)
+			log.Printf("=======================================================================")
 		}
 	}
 
-	// Check if this request should be blocked based on cached kind 5 deletion requests
-	if r.isBlockedEvent(filter) && ctx.Value(1) == nil {
+	// if debug message is set, we need to ignore, return a closed channel
+	if debugMsg != "" {
 		atomic.AddInt64(&r.queryInternal, 1)
 		if r.Verbose {
-			log.Printf("[relaystore][DEBUG] request blocked due to kind 5 deletion: %+v", filter)
+			if debugMsg != "" {
+				log.Println(debugMsg)
+			}
 		}
 		ch := make(chan *nostr.Event)
 		close(ch)
@@ -795,24 +786,6 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 		return 0, nil
 	}
 
-	// same adding.go special-case as QueryEvents
-	if isAddingKind5Filter(filter) && ctx.Value(1) == nil {
-		atomic.AddInt64(&r.countInternal, 1)
-		if r.Verbose {
-			log.Printf("[relaystore][DEBUG] internal count short-circuited (adding.go kind=5 #e, no ctx[1]) filter=%+v", filter)
-		}
-		return 0, nil
-	}
-
-	// Check if this request should be blocked based on cached kind 5 deletion requests
-	if r.isBlockedEvent(filter) && ctx.Value(1) == nil {
-		atomic.AddInt64(&r.countInternal, 1)
-		if r.Verbose {
-			log.Printf("[relaystore][DEBUG] count request blocked due to kind 5 deletion: %+v", filter)
-		}
-		return 0, nil
-	}
-
 	atomic.AddInt64(&r.countExternal, 1)
 
 	if r.pool == nil {
@@ -871,7 +844,7 @@ var _ eventstore.Counter = (*RelayStore)(nil)
 
 // isAddingKind5Filter detects the exact filter literal used in khatru's
 // adding.go deletion-check: {Kinds: []int{5}, Tags: TagMap{"#e": []string{id}}}
-func isAddingKind5Filter(f nostr.Filter) bool {
+func isKind5ForRegularEvents(f nostr.Filter) bool {
 	if len(f.Kinds) != 1 || f.Kinds[0] != 5 {
 		return false
 	}
@@ -884,55 +857,25 @@ func isAddingKind5Filter(f nostr.Filter) bool {
 	return false
 }
 
-// generateKind5CacheKey creates a cache key for kind 5 deletion requests
-func generateKind5CacheKey(filter nostr.Filter) string {
-	// Create a key based on the filter's essential components
-	key := fmt.Sprintf("kind5:%d", filter.Kinds[0])
-	if filter.Since != nil {
-		key += fmt.Sprintf(":since:%d", *filter.Since)
-	}
-	if filter.Until != nil {
-		key += fmt.Sprintf(":until:%d", *filter.Until)
-	}
-	if len(filter.Authors) > 0 {
-		key += fmt.Sprintf(":authors:%s", strings.Join(filter.Authors, ","))
-	}
-	if len(filter.IDs) > 0 {
-		key += fmt.Sprintf(":ids:%s", strings.Join(filter.IDs, ","))
-	}
-	// Include tag patterns
-	for tag, values := range filter.Tags {
-		key += fmt.Sprintf(":%s:%s", tag, strings.Join(values, ","))
-	}
-	return key
-}
+// parseKindAndAuthorFromFilter extracts blocked events from ##a tags in kind 5 requests
+func parseKindAndAuthorFromFilter(filter nostr.Filter) []string {
+	var blockedKeys []string
 
-// parseKind5BlockedEvents extracts blocked events from ##a tags in kind 5 requests
-func parseKind5BlockedEvents(filter nostr.Filter) map[string]bool {
-	blockedEvents := make(map[string]bool)
-
-	for tag, values := range filter.Tags {
-		if strings.HasPrefix(tag, "##") {
-			// Parse ##a tags like "10002:fbc48d3446dc4668a58340f9fc33f07be9a957044106615885f140a95c088a5f:"
-			for _, value := range values {
-				// Split by colon to get kind:author
-				parts := strings.Split(value, ":")
-				if len(parts) >= 2 {
-					kind := parts[0]
-					author := parts[1]
-					if kind != "" && author != "" {
-						blockedEvents[fmt.Sprintf("%s:%s", kind, author)] = true
-					}
-				}
-			}
+	tags, ok := filter.Tags["#a"]
+	if ok && len(tags) > 0 {
+		tag := tags[0]
+		blockedKeys = append(blockedKeys, tags...)
+		if len(tag) > 0 && tag[len(tag)-1] != ':' {
+			// tag is in format xxx:xxx:xxx, remove the last part, after the last :
+			tagNoAddress := tag[:strings.LastIndex(tag, ":")] + ":"
+			blockedKeys = append(blockedKeys, tagNoAddress)
 		}
 	}
-
-	return blockedEvents
+	return blockedKeys
 }
 
-// isBlockedEvent checks if a request should be blocked based on cached kind 5 deletion requests
-func (r *RelayStore) isBlockedEvent(filter nostr.Filter) bool {
+// isBlockedreplaceableEvent checks if a request should be blocked based on cached kind 5 deletion requests
+func (r *RelayStore) isBlockedreplaceableEvent(filter nostr.Filter) bool {
 	// Only check if this is a single-kind, single-author request
 	if len(filter.Kinds) != 1 || len(filter.Authors) != 1 {
 		return false
@@ -940,9 +883,15 @@ func (r *RelayStore) isBlockedEvent(filter nostr.Filter) bool {
 
 	kind := filter.Kinds[0]
 	author := filter.Authors[0]
+	// has addressable tags
+	blockedKey := fmt.Sprintf("%d:%s:", kind, author)
 
-	// Create a key to check if this kind:author combination is blocked
-	blockedKey := fmt.Sprintf("%d:%s", kind, author)
+	if tag, ok := filter.Tags["d"]; ok && len(tag) > 0 {
+		// already have a trailing :
+		blockedKey = fmt.Sprintf("%s%s", blockedKey, tag[0])
+	}
+
+	// Create a key to check if this kind:author combination is blocked, has trailing :
 
 	r.kind5CacheMu.RLock()
 	defer r.kind5CacheMu.RUnlock()
@@ -958,8 +907,9 @@ func (r *RelayStore) isBlockedEvent(filter nostr.Filter) bool {
 	return false
 }
 
-// isKind5DeletionRequest checks if this is a kind 5 deletion request that should be cached
-func isKind5DeletionRequest(filter nostr.Filter) bool {
+// isKind5ForReplaceableEvents checks if this is a kind 5 deletion request that should be cached
+func isKind5ForReplaceableEvents(filter nostr.Filter) bool {
+
 	if len(filter.Kinds) != 1 || filter.Kinds[0] != 5 {
 		return false
 	}
@@ -969,55 +919,50 @@ func isKind5DeletionRequest(filter nostr.Filter) bool {
 		return false
 	}
 
-	// Check for ##a tags (deletion patterns)
+	// Check for ##a tags (deletion patterns), they are tags with key "#a"
 	if len(filter.Tags) > 0 {
-		for tag := range filter.Tags {
-			if strings.HasPrefix(tag, "##") {
-				return true
-			}
+		_, ok := filter.Tags["#a"]
+		if ok {
+			return true
 		}
 	}
 	return false
 }
 
 // handleKind5Caching manages the caching of kind 5 deletion requests
-func (r *RelayStore) handleKind5Caching(filter nostr.Filter) bool {
+func (r *RelayStore) handleAddressableEventsCaching(filter nostr.Filter) {
 	// Parse blocked events from the kind 5 request
-	blockedEvents := parseKind5BlockedEvents(filter)
+	blockedKeys := parseKindAndAuthorFromFilter(filter)
 
 	r.kind5CacheMu.Lock()
 	defer r.kind5CacheMu.Unlock()
 
 	// Add each blocked event to the cache with expiration time
 	expirationTime := time.Now().Add(r.kind5CacheDelay)
-	for blockedKey := range blockedEvents {
+	for _, blockedKey := range blockedKeys {
 		r.kind5BlockedEvents[blockedKey] = expirationTime
+		// Start a goroutine to handle the delayed cleanup for this specific key
+		go r.cleanupKind5Cache(blockedKey)
 	}
-
-	// Start a goroutine to handle the delayed cleanup
-	go r.cleanupKind5Cache(blockedEvents)
 
 	if r.Verbose {
-		log.Printf("[relaystore][DEBUG] kind 5 request cached with blocked events: %v", blockedEvents)
+		log.Printf("[relaystore][DEBUG] kind 5 request cached with blocked events: %v", blockedKeys)
 	}
 
-	return true
 }
 
-// cleanupKind5Cache removes expired cache entries
-func (r *RelayStore) cleanupKind5Cache(blockedEvents map[string]bool) {
+// cleanupKind5Cache removes a specific blocked event after delay
+func (r *RelayStore) cleanupKind5Cache(blockedKey string) {
 	// Wait for the cache delay
 	time.Sleep(r.kind5CacheDelay)
 
 	r.kind5CacheMu.Lock()
 	defer r.kind5CacheMu.Unlock()
 
-	// Remove the blocked events from cache
-	for blockedKey := range blockedEvents {
-		delete(r.kind5BlockedEvents, blockedKey)
-	}
+	// Remove the specific blocked event
+	delete(r.kind5BlockedEvents, blockedKey)
 
 	if r.Verbose {
-		log.Printf("[relaystore][DEBUG] kind 5 blocked events cleaned up: %v", blockedEvents)
+		log.Printf("[relaystore][DEBUG] kind 5 blocked event cleaned up: %s", blockedKey)
 	}
 }
