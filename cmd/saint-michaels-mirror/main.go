@@ -176,19 +176,19 @@ func main() {
 	r.QueryEvents = append(r.QueryEvents, rs.QueryEvents)
 	r.CountEvents = append(r.CountEvents, rs.CountEvents)
 
-	// Add basic anti-spam policies using khatru's built-in capabilities
+	// Add khatru anti-spam policies using RejectEvent hook
 	r.RejectEvent = append(r.RejectEvent, func(ctx context.Context, event *nostr.Event) (reject bool, msg string) {
-		// Reject events that are too large (>32KB)
+		// Policy 1: Reject events that are too large (>32KB)
 		if len(event.Content) > 32768 {
 			return true, "blocked: event content too large"
 		}
 
-		// Reject events with excessive tags (>100 tags)
+		// Policy 2: Reject events with excessive tags (>100 tags)
 		if len(event.Tags) > 100 {
 			return true, "blocked: too many tags"
 		}
 
-		// Reject events with malformed timestamps
+		// Policy 3: Reject events with malformed timestamps
 		now := nostr.Timestamp(time.Now().Unix())
 		if event.CreatedAt > now+3600 { // More than 1 hour in future
 			return true, "blocked: event timestamp too far in future"
@@ -197,8 +197,29 @@ func main() {
 			return true, "blocked: event timestamp too far in past"
 		}
 
+		// Policy 4: Reject events with suspicious kind values
+		if event.Kind < 0 || event.Kind > 30000 {
+			return true, "blocked: invalid event kind"
+		}
+
+		// Policy 5: Reject events with empty content but many tags (potential spam)
+		if len(strings.TrimSpace(event.Content)) == 0 && len(event.Tags) > 20 {
+			return true, "blocked: empty content with excessive tags"
+		}
+
 		// Allow the event
 		return false, ""
+	})
+
+	// Add connection-level anti-spam policies using RejectConnection hook
+	r.RejectConnection = append(r.RejectConnection, func(r *http.Request) bool {
+		// Basic connection validation - reject obviously invalid requests
+		if r == nil || r.RemoteAddr == "" {
+			return true
+		}
+
+		// Allow all other connections
+		return false
 	})
 
 	// start event mirroring from query relays
@@ -490,4 +511,3 @@ func ensureSupportedNips(r *khatru.Relay, nips []int) {
 		}
 	}
 }
-
