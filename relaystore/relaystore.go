@@ -498,7 +498,7 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 	atomic.AddInt64(&r.queryRequests, 1)
 
 	// If khatru explicitly marked this as an internal call, short-circuit.
-	if khatru.IsInternalCall(ctx) || ctx.Value(1) != nil {
+	if khatru.IsInternalCall(ctx) || ctx.Value(1) == nil {
 		atomic.AddInt64(&r.queryInternal, 1)
 		if r.Verbose {
 			log.Printf("[relaystore][DEBUG] internal query short-circuited (khatru internal call) filter=%+v", filter)
