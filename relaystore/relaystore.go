@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	neturl "net/url"
 	"strings"
@@ -22,6 +21,7 @@ import (
 
 	"github.com/fiatjaf/eventstore"
 	"github.com/fiatjaf/khatru"
+	"github.com/girino/saint-michaels-mirror/logging"
 	"github.com/nbd-wtf/go-nostr"
 )
 
@@ -90,9 +90,7 @@ func (r *RelayStore) handleError(errsMu *sync.Mutex, errs *[]error, prefixedErrs
 	errsMu.Unlock()
 	// count failure
 	atomic.AddInt64(&r.publishFailures, 1)
-	if r.Verbose {
-		log.Printf("[relaystore][WARN] %s to %s failed: %v", context, url, err)
-	}
+	logging.DebugMethod("relaystore", "logError", "%s to %s failed: %v", context, url, err)
 }
 
 type RelayStore struct {
@@ -105,8 +103,6 @@ type RelayStore struct {
 	mu   sync.RWMutex
 	// publish timeout per remote
 	publishTimeout time.Duration
-	// verbose enables debug logging
-	Verbose bool
 	// relaySecKey is the private key used for authenticating to upstream relays
 	relaySecKey string
 	// semaphore limits concurrent FetchMany calls
@@ -304,23 +300,17 @@ func (r *RelayStore) Init() error {
 			continue
 		}
 		go func(url string) {
-			if r.Verbose {
-				log.Printf("[relaystore] attempting initial connect to %s", url)
-			}
+			logging.DebugMethod("relaystore", "Init", "attempting initial connect to %s", url)
 			rl, err := nostr.RelayConnect(ctx, url)
 			if err != nil {
-				if r.Verbose {
-					log.Printf("[relaystore][WARN] failed initial connect to %s: %v", url, err)
-				}
+				logging.DebugMethod("relaystore", "Init", "failed initial connect to %s: %v", url, err)
 				// store nothing on failure; we'll attempt reconnects later on publish
 				return
 			}
 			r.mu.Lock()
 			r.relays[url] = rl
 			r.mu.Unlock()
-			if r.Verbose {
-				log.Printf("[relaystore] connected to %s", url)
-			}
+			logging.DebugMethod("relaystore", "Init", "connected to %s", url)
 		}(u)
 	}
 
@@ -350,48 +340,36 @@ func (r *RelayStore) Init() error {
 		}
 		parsed, err := neturl.Parse(u)
 		if err != nil {
-			if r.Verbose {
-				log.Printf("[relaystore][WARN] cannot parse query url %s: %v", q, err)
-			}
+			logging.DebugMethod("relaystore", "Init", "cannot parse query url %s: %v", q, err)
 			continue
 		}
 		// ensure root path
 		parsed.Path = "/"
 		probeURL := parsed.String()
 
-		if r.Verbose {
-			log.Printf("[relaystore] probing NIP-11 for %s -> %s", q, probeURL)
-		}
+		logging.DebugMethod("relaystore", "Init", "probing NIP-11 for %s -> %s", q, probeURL)
 		client := &http.Client{Timeout: 4 * time.Second}
 		req, err := http.NewRequest("GET", probeURL, nil)
 		if err != nil {
-			if r.Verbose {
-				log.Printf("[relaystore][INFO] failed to build NIP-11 probe request for %s: %v", q, err)
-			}
+			logging.DebugMethod("relaystore", "Init", "failed to build NIP-11 probe request for %s: %v", q, err)
 			continue
 		}
 		// NIP-01 requires Accept: application/nostr+json
 		req.Header.Set("Accept", "application/nostr+json")
 		resp, err := client.Do(req)
 		if err != nil {
-			if r.Verbose {
-				log.Printf("[relaystore][INFO] failed probing NIP-11 for %s: %v", q, err)
-			}
+			logging.DebugMethod("relaystore", "Init", "failed probing NIP-11 for %s: %v", q, err)
 			continue
 		}
 		func() {
 			defer resp.Body.Close()
 			if resp.StatusCode != 200 {
-				if r.Verbose {
-					log.Printf("[relaystore][INFO] non-200 NIP-11 response from %s: %d", q, resp.StatusCode)
-				}
+				logging.DebugMethod("relaystore", "Init", "non-200 NIP-11 response from %s: %d", q, resp.StatusCode)
 				return
 			}
 			var doc map[string]interface{}
 			if err := json.NewDecoder(resp.Body).Decode(&doc); err != nil {
-				if r.Verbose {
-					log.Printf("[relaystore][INFO] failed to decode NIP-11 from %s: %v", q, err)
-				}
+				logging.DebugMethod("relaystore", "Init", "failed to decode NIP-11 from %s: %v", q, err)
 				return
 			}
 			// check supported_nips (NIP-11) for 45
@@ -403,9 +381,7 @@ func (r *RelayStore) Init() error {
 						if num, ok := v.(float64); ok {
 							if int(num) == 45 {
 								r.countableQueryUrls = append(r.countableQueryUrls, q)
-								if r.Verbose {
-									log.Printf("[relaystore] relay %s advertises NIP-45; added to countable list", q)
-								}
+								logging.DebugMethod("relaystore", "Init", "relay %s advertises NIP-45; added to countable list", q)
 								return
 							}
 						}
@@ -414,24 +390,18 @@ func (r *RelayStore) Init() error {
 					for _, nip := range arr {
 						if nip == 45 {
 							r.countableQueryUrls = append(r.countableQueryUrls, q)
-							if r.Verbose {
-								log.Printf("[relaystore] relay %s advertises NIP-45; added to countable list", q)
-							}
+							logging.DebugMethod("relaystore", "Init", "relay %s advertises NIP-45; added to countable list", q)
 							return
 						}
 					}
 				}
 			}
-			if r.Verbose {
-				log.Printf("[relaystore] relay %s does not advertise NIP-45", q)
-			}
+			logging.DebugMethod("relaystore", "Init", "relay %s does not advertise NIP-45", q)
 		}()
 	}
 
-	if r.Verbose {
-		log.Printf("[relaystore] query remotes: %v", r.queryUrls)
-		log.Printf("[relaystore] countable query remotes (NIP-45): %v", r.countableQueryUrls)
-	}
+	logging.DebugMethod("relaystore", "Init", "query remotes: %v", r.queryUrls)
+	logging.DebugMethod("relaystore", "Init", "countable query remotes (NIP-45): %v", r.countableQueryUrls)
 	return nil
 }
 
@@ -453,49 +423,39 @@ func (r *RelayStore) ensureRelay(ctx context.Context, url string) (*nostr.Relay,
 		return rl, nil
 	}
 	// try to connect synchronously
-	if r.Verbose {
-		log.Printf("[relaystore] connecting to %s", url)
-	}
+	logging.DebugMethod("relaystore", "ensureRelay", "connecting to %s", url)
 	newrl, err := nostr.RelayConnect(ctx, url)
 	if err != nil {
-		if r.Verbose {
-			log.Printf("[relaystore][ERROR] failed to connect to %s: %v", url, err)
-		}
+		logging.DebugMethod("relaystore", "ensureRelay", "failed to connect to %s: %v", url, err)
 		return nil, err
 	}
 
 	// attempt authentication if we have a relay secret key
 	if r.relaySecKey != "" {
-		if r.Verbose {
-			log.Printf("[relaystore] attempting authentication to %s with key length: %d", url, len(r.relaySecKey))
-			if len(r.relaySecKey) > 0 {
-				prefixLen := 8
-				if len(r.relaySecKey) < prefixLen {
-					prefixLen = len(r.relaySecKey)
-				}
-				log.Printf("[relaystore] relaySecKey starts with: %s", r.relaySecKey[:prefixLen])
+		logging.DebugMethod("relaystore", "ensureRelay", "attempting authentication to %s with key length: %d", url, len(r.relaySecKey))
+		if len(r.relaySecKey) > 0 {
+			prefixLen := 8
+			if len(r.relaySecKey) < prefixLen {
+				prefixLen = len(r.relaySecKey)
 			}
+			logging.DebugMethod("relaystore", "ensureRelay", "relaySecKey starts with: %s", r.relaySecKey[:prefixLen])
 		}
 		err = newrl.Auth(ctx, func(event *nostr.Event) error {
 			// sign the AUTH event with our relay secret key
 			return event.Sign(r.relaySecKey)
 		})
 		if err != nil {
-			if r.Verbose {
-				log.Printf("[relaystore][WARN] authentication to %s failed: %v", url, err)
-			}
+			logging.DebugMethod("relaystore", "ensureRelay", "authentication to %s failed: %v", url, err)
 			// continue without authentication - some relays don't require it
-		} else if r.Verbose {
-			log.Printf("[relaystore] authenticated to %s", url)
+		} else {
+			logging.DebugMethod("relaystore", "ensureRelay", "authenticated to %s", url)
 		}
 	}
 
 	r.mu.Lock()
 	r.relays[url] = newrl
 	r.mu.Unlock()
-	if r.Verbose {
-		log.Printf("[relaystore] connected to %s", url)
-	}
+	logging.DebugMethod("relaystore", "ensureRelay", "connected to %s", url)
 	return newrl, nil
 }
 
@@ -507,9 +467,7 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 	// If khatru explicitly marked this as an internal call, short-circuit.
 	if khatru.IsInternalCall(ctx) || ctx.Value(1) == nil {
 		atomic.AddInt64(&r.queryInternal, 1)
-		if r.Verbose {
-			log.Printf("[relaystore][DEBUG] internal query short-circuited (khatru internal call) filter=%+v", filter)
-		}
+		logging.DebugMethod("relaystore", "QueryEvents", "internal query short-circuited (khatru internal call) filter=%+v", filter)
 		ch := make(chan *nostr.Event)
 		close(ch)
 		return ch, nil
@@ -519,18 +477,14 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 
 	// if no pool available, return closed channel
 	if r.pool == nil {
-		if r.Verbose {
-			log.Printf("[relaystore][DEBUG] QueryEvents called but no pool initialized (khatru_internal_call=%v) filter=%+v", khatru.IsInternalCall(ctx), filter)
-		}
+		logging.DebugMethod("relaystore", "QueryEvents", "QueryEvents called but no pool initialized (khatru_internal_call=%v) filter=%+v", khatru.IsInternalCall(ctx), filter)
 		ch := make(chan *nostr.Event)
 		close(ch)
 		return ch, nil
 	}
 
 	// use FetchMany which ends when all relays return EOSE
-	if r.Verbose {
-		log.Printf("[relaystore][DEBUG] QueryEvents called (khatru_internal_call=%v) filter=%+v", khatru.IsInternalCall(ctx), filter)
-	}
+	logging.DebugMethod("relaystore", "QueryEvents", "QueryEvents called (khatru_internal_call=%v) filter=%+v", khatru.IsInternalCall(ctx), filter)
 
 	// Start timing measurement for the complete query operation
 	startTime := time.Now()
@@ -545,9 +499,7 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 			// count query relay failure
 			atomic.AddInt64(&r.queryFailures, 1)
 			queryFailures++
-			if r.Verbose {
-				log.Printf("[relaystore][WARN] failed to ensure query relay %s: %v", q, err)
-			}
+			logging.DebugMethod("relaystore", "QueryEvents", "failed to ensure query relay %s: %v", q, err)
 		}
 	}
 
@@ -563,23 +515,17 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 	// Acquire semaphore to limit concurrent FetchMany calls
 	// Increment wait counter before attempting acquisition
 	atomic.AddInt64(&r.semaphoreWaitCount, 1)
-	if r.Verbose {
-		log.Printf("[relaystore][DEBUG] attempting semaphore acquisition (wait count: %d)", atomic.LoadInt64(&r.semaphoreWaitCount))
-	}
+	logging.DebugMethod("relaystore", "QueryEvents", "attempting semaphore acquisition (wait count: %d)", atomic.LoadInt64(&r.semaphoreWaitCount))
 
 	select {
 	case r.fetchSemaphore <- struct{}{}:
 		// Semaphore acquired successfully - decrement wait counter
 		atomic.AddInt64(&r.semaphoreWaitCount, -1)
-		if r.Verbose {
-			log.Printf("[relaystore][DEBUG] acquired semaphore for FetchMany (remaining slots: %d)", cap(r.fetchSemaphore)-len(r.fetchSemaphore))
-		}
+		logging.DebugMethod("relaystore", "QueryEvents", "acquired semaphore for FetchMany (remaining slots: %d)", cap(r.fetchSemaphore)-len(r.fetchSemaphore))
 	case <-ctx.Done():
 		// Context cancelled - decrement wait counter
 		atomic.AddInt64(&r.semaphoreWaitCount, -1)
-		if r.Verbose {
-			log.Printf("[relaystore][WARN] query context cancelled while acquiring semaphore")
-		}
+		logging.DebugMethod("relaystore", "QueryEvents", "query context cancelled while acquiring semaphore")
 		return nil, ctx.Err()
 	}
 
@@ -593,9 +539,7 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 		// Release semaphore when goroutine completes
 		defer func() {
 			<-r.fetchSemaphore
-			if r.Verbose {
-				log.Printf("[relaystore][DEBUG] released semaphore for FetchMany (remaining slots: %d)", cap(r.fetchSemaphore)-len(r.fetchSemaphore))
-			}
+			logging.DebugMethod("relaystore", "QueryEvents", "released semaphore for FetchMany (remaining slots: %d)", cap(r.fetchSemaphore)-len(r.fetchSemaphore))
 		}()
 
 		// Complete timing measurement for the complete query operation
@@ -615,13 +559,11 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 		for {
 			select {
 			case <-timeoutCtx.Done():
-				log.Printf("[relaystore][WARN] query timed out after 3 seconds")
+				logging.Warn("query timed out after 3 seconds")
 				return
 			case ie, ok := <-evch:
 				if !ok {
-					if r.Verbose {
-						log.Printf("[relaystore][WARN] query channel closed")
-					}
+					logging.DebugMethod("relaystore", "QueryEvents", "query channel closed")
 					return
 				}
 				if ie.Event != nil {
@@ -630,13 +572,11 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 					case out <- ie.Event:
 						numEvents++ // Event sent successfully
 						if numEvents >= maxEvents {
-							if r.Verbose {
-								log.Printf("[relaystore][WARN] query reached max events limit of %d", maxEvents)
-							}
+							logging.DebugMethod("relaystore", "QueryEvents", "query reached max events limit of %d", maxEvents)
 							return
 						}
 					case <-timeoutCtx.Done():
-						log.Printf("[relaystore][WARN] query timed out after 3 seconds")
+						logging.Warn("query timed out after 3 seconds")
 						return
 					}
 				}
@@ -670,9 +610,7 @@ func (r *RelayStore) SaveEvent(ctx context.Context, evt *nostr.Event) error {
 
 	// if no remotes configured, simply return nil (nothing to do)
 	if len(r.urls) == 0 {
-		if r.Verbose {
-			log.Printf("[relaystore][WARN] no remotes configured, not forwarding event %s", evt.ID)
-		}
+		logging.DebugMethod("relaystore", "SaveEvent", "no remotes configured, not forwarding event %s", evt.ID)
 		return nil
 	}
 
@@ -688,9 +626,7 @@ func (r *RelayStore) SaveEvent(ctx context.Context, evt *nostr.Event) error {
 			cctx, cancel := context.WithTimeout(ctx, r.publishTimeout)
 			defer cancel()
 
-			if r.Verbose {
-				log.Printf("[relaystore][DEBUG] publishing event %s to %s", evt.ID, u)
-			}
+			logging.DebugMethod("relaystore", "SaveEvent", "publishing event %s to %s", evt.ID, u)
 
 			// count attempt
 			atomic.AddInt64(&r.publishAttempts, 1)
@@ -700,38 +636,28 @@ func (r *RelayStore) SaveEvent(ctx context.Context, evt *nostr.Event) error {
 				errsMu.Lock()
 				errs = append(errs, fmt.Errorf("%s: %w", u, err))
 				errsMu.Unlock()
-				if r.Verbose {
-					log.Printf("[relaystore][WARN] publish to %s failed to get relay: %v", u, err)
-				}
+				logging.DebugMethod("relaystore", "SaveEvent", "publish to %s failed to get relay: %v", u, err)
 				return
 			}
 
 			if err := rl.Publish(cctx, *evt); err != nil {
 				// Check if this is an auth-required error and we have a relay key
 				if prefix, _ := parseErrorPrefix(err); prefix == "auth-required" && r.relaySecKey != "" {
-					if r.Verbose {
-						log.Printf("[relaystore] auth-required from %s, attempting relay authentication", u)
-					}
+					logging.DebugMethod("relaystore", "SaveEvent", "auth-required from %s, attempting relay authentication", u)
 
 					// Try to authenticate with the upstream relay
 					// Derive our relay's public key for logging
 					relayPubKey, _ := nostr.GetPublicKey(r.relaySecKey)
-					if r.Verbose {
-						log.Printf("[relaystore] authenticating with upstream relay using pubkey: %s", relayPubKey)
-					}
+					logging.DebugMethod("relaystore", "SaveEvent", "authenticating with upstream relay using pubkey: %s", relayPubKey)
 					authErr := rl.Auth(cctx, func(event *nostr.Event) error {
 						return event.Sign(r.relaySecKey)
 					})
 
 					if authErr != nil {
-						if r.Verbose {
-							log.Printf("[relaystore][WARN] authentication to %s failed: %v", u, authErr)
-						}
+						logging.DebugMethod("relaystore", "SaveEvent", "authentication to %s failed: %v", u, authErr)
 						// Continue with normal error handling
 					} else {
-						if r.Verbose {
-							log.Printf("[relaystore] authenticated to %s, retrying publish", u)
-						}
+						logging.DebugMethod("relaystore", "SaveEvent", "authenticated to %s, retrying publish", u)
 
 						// Retry the publish after authentication
 						if retryErr := rl.Publish(cctx, *evt); retryErr != nil {
@@ -741,9 +667,7 @@ func (r *RelayStore) SaveEvent(ctx context.Context, evt *nostr.Event) error {
 
 						// Success after authentication
 						atomic.AddInt64(&r.publishSuccesses, 1)
-						if r.Verbose {
-							log.Printf("[relaystore][DEBUG] publish to %s succeeded after authentication for event %s", u, evt.ID)
-						}
+						logging.DebugMethod("relaystore", "SaveEvent", "publish to %s succeeded after authentication for event %s", u, evt.ID)
 						return
 					}
 				}
@@ -753,9 +677,7 @@ func (r *RelayStore) SaveEvent(ctx context.Context, evt *nostr.Event) error {
 			}
 			// count success
 			atomic.AddInt64(&r.publishSuccesses, 1)
-			if r.Verbose {
-				log.Printf("[relaystore][DEBUG] publish to %s succeeded for event %s", u, evt.ID)
-			}
+			logging.DebugMethod("relaystore", "SaveEvent", "publish to %s succeeded for event %s", u, evt.ID)
 		}(url)
 	}
 
@@ -810,30 +732,22 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 	// short-circuit khatru internal calls
 	if khatru.IsInternalCall(ctx) {
 		atomic.AddInt64(&r.countInternal, 1)
-		if r.Verbose {
-			log.Printf("[relaystore][DEBUG] internal count short-circuited (khatru internal call) filter=%+v", filter)
-		}
+		logging.DebugMethod("relaystore", "CountEvents", "internal count short-circuited (khatru internal call) filter=%+v", filter)
 		return 0, nil
 	}
 
 	atomic.AddInt64(&r.countExternal, 1)
 
 	if r.pool == nil {
-		if r.Verbose {
-			log.Printf("[relaystore][DEBUG] CountEvents called but no pool initialized (khatru_internal_call=%v) filter=%+v", khatru.IsInternalCall(ctx), filter)
-		}
+		logging.DebugMethod("relaystore", "CountEvents", "CountEvents called but no pool initialized (khatru_internal_call=%v) filter=%+v", khatru.IsInternalCall(ctx), filter)
 		return 0, nil
 	}
 
-	if r.Verbose {
-		log.Printf("[relaystore][DEBUG] CountEvents called (khatru_internal_call=%v) filter=%+v", khatru.IsInternalCall(ctx), filter)
-	}
+	logging.DebugMethod("relaystore", "CountEvents", "CountEvents called (khatru_internal_call=%v) filter=%+v", khatru.IsInternalCall(ctx), filter)
 
 	// ensure relays and count failures (only for countable query remotes)
 	if len(r.countableQueryUrls) == 0 {
-		if r.Verbose {
-			log.Printf("[relaystore][DEBUG] no NIP-45-capable query remotes available; returning 0")
-		}
+		logging.DebugMethod("relaystore", "CountEvents", "no NIP-45-capable query remotes available; returning 0")
 		return 0, nil
 	}
 
@@ -845,9 +759,7 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 		if _, err := r.pool.EnsureRelay(q); err != nil {
 			atomic.AddInt64(&r.countFailures, 1)
 			countFailures++
-			if r.Verbose {
-				log.Printf("[relaystore][WARN] failed to ensure query relay %s: %v", q, err)
-			}
+			logging.DebugMethod("relaystore", "CountEvents", "failed to ensure query relay %s: %v", q, err)
 		}
 	}
 

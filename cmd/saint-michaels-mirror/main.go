@@ -12,7 +12,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"html/template"
-	"log"
 	"net"
 	"net/http"
 	"runtime"
@@ -22,6 +21,7 @@ import (
 
 	"github.com/fiatjaf/khatru"
 	"github.com/fiatjaf/khatru/policies"
+	"github.com/girino/saint-michaels-mirror/logging"
 	"github.com/girino/saint-michaels-mirror/mirror"
 	"github.com/girino/saint-michaels-mirror/relaystore"
 	"github.com/nbd-wtf/go-nostr"
@@ -36,6 +36,14 @@ func main() {
 	// use LoadConfig to read env/flags
 	cfg := LoadConfig()
 
+	// Initialize logging package from config
+	// Examples:
+	//   - VERBOSE=1 or VERBOSE=true: enable all verbose logging
+	//   - VERBOSE=relaystore: enable verbose for relaystore module only
+	//   - VERBOSE=relaystore.QueryEvents,mirror: enable specific method + module
+	//   - VERBOSE=: disable all verbose logging (default)
+	logging.SetVerbose(cfg.Verbose)
+
 	// create a basic khatru relay instance
 	r := khatru.NewRelay()
 
@@ -49,9 +57,7 @@ func main() {
 		s := nostr.GeneratePrivateKey()
 		if s != "" {
 			sec = s
-			if cfg.Verbose {
-				log.Printf("generated new relay secret key")
-			}
+			logging.DebugMethod("main", "main", "generated new relay secret key")
 		}
 	}
 
@@ -93,28 +99,22 @@ func main() {
 		rs = relaystore.New(cfg.QueryRemotes, cfg.PublishRemotes, decodedSec)
 	} else {
 		// No query remotes provided - fail
-		log.Fatalf("no query remotes provided - relaystore requires query remotes")
-	}
-	if cfg.Verbose {
-		rs.Verbose = true
+		logging.Fatal("no query remotes provided - relaystore requires query remotes")
 	}
 	if err := rs.Init(); err != nil {
-		log.Fatalf("initializing relaystore: %v", err)
+		logging.Fatal("initializing relaystore: %v", err)
 	}
 
 	// initialize mirror manager with query remotes or fail
 	var mm *mirror.MirrorManager
 	if len(cfg.QueryRemotes) > 0 {
 		mm = mirror.NewMirrorManager(cfg.QueryRemotes)
-		if cfg.Verbose {
-			mm.Verbose = true
-		}
 		if err := mm.Init(); err != nil {
-			log.Fatalf("initializing mirror manager: %v", err)
+			logging.Fatal("initializing mirror manager: %v", err)
 		}
 	} else {
 		// No query remotes provided - fail
-		log.Fatalf("no query remotes provided - mirror manager requires query remotes")
+		logging.Fatal("no query remotes provided - mirror manager requires query remotes")
 	}
 
 	// Ensure some canonical NIP-11 fields are set on the relay Info. ApplyToRelay
@@ -178,7 +178,7 @@ func main() {
 		func(ctx context.Context, filter nostr.Filter) (reject bool, msg string) {
 			reject, msg = policies.FilterIPRateLimiter(5, time.Minute, 20)(ctx, filter)
 			if reject {
-				log.Printf("filter IP rate limiter: %v, %s, from: %s", reject, msg, khatru.GetIP(ctx))
+				logging.Warn("filter IP rate limiter: %v, %s, from: %s", reject, msg, khatru.GetIP(ctx))
 			}
 			return reject, msg
 		},
@@ -190,7 +190,7 @@ func main() {
 		func(req *http.Request) (reject bool) {
 			reject = policies.ConnectionRateLimiter(1, time.Minute*2, 5)(req)
 			if reject {
-				log.Printf("connection rate limiter: %v, from: %s", reject, khatru.GetIPFromRequest(req))
+				logging.Warn("connection rate limiter: %v, from: %s", reject, khatru.GetIPFromRequest(req))
 			}
 			return reject
 		},
@@ -203,7 +203,7 @@ func main() {
 
 	// start event mirroring from query relays
 	if err := mm.StartMirroring(r); err != nil {
-		log.Fatalf("[mirror] failed to start mirroring: %v", err)
+		logging.Fatal("[mirror] failed to start mirroring: %v", err)
 	}
 	defer mm.StopMirroring()
 
@@ -402,7 +402,7 @@ func main() {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if err := tpl.Execute(w, vm); err != nil {
 			http.Error(w, "template render error", http.StatusInternalServerError)
-			log.Printf("%s template execute error: %v", pageName, err)
+			logging.Error("%s template execute error: %v", pageName, err)
 		}
 	}
 
@@ -414,7 +414,7 @@ func main() {
 	mainTplPath := "cmd/saint-michaels-mirror/templates/index.html"
 	mainTpl, err := template.ParseFiles(baseTplPath, mainTplPath)
 	if err != nil {
-		log.Fatalf("failed to parse main template %s: %v", mainTplPath, err)
+		logging.Fatal("failed to parse main template %s: %v", mainTplPath, err)
 	}
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
@@ -426,7 +426,7 @@ func main() {
 	statsTplPath := "cmd/saint-michaels-mirror/templates/stats.html"
 	statsTpl, err := template.ParseFiles(baseTplPath, statsTplPath)
 	if err != nil {
-		log.Fatalf("failed to parse stats template %s: %v", statsTplPath, err)
+		logging.Fatal("failed to parse stats template %s: %v", statsTplPath, err)
 	}
 	mux.HandleFunc("/stats", func(w http.ResponseWriter, req *http.Request) {
 		vm := buildViewModel(true) // Stats page shows back link
@@ -437,7 +437,7 @@ func main() {
 	healthTplPath := "cmd/saint-michaels-mirror/templates/health.html"
 	healthTpl, err := template.ParseFiles(baseTplPath, healthTplPath)
 	if err != nil {
-		log.Fatalf("failed to parse health template %s: %v", healthTplPath, err)
+		logging.Fatal("failed to parse health template %s: %v", healthTplPath, err)
 	}
 	mux.HandleFunc("/health", func(w http.ResponseWriter, req *http.Request) {
 		vm := buildViewModel(true) // Health page shows back link
@@ -456,18 +456,18 @@ func main() {
 			host = ""
 			portStr = cfg.Addr[1:]
 		} else {
-			log.Fatalf("invalid addr: %v", err)
+			logging.Fatal("invalid addr: %v", err)
 		}
 
 	}
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
-		log.Fatalf("invalid port: %v", err)
+		logging.Fatal("invalid port: %v", err)
 	}
 
-	log.Printf("Starting %s on %s", ProjectName, cfg.Addr)
+	logging.Info("Starting %s on %s", ProjectName, cfg.Addr)
 	if err := r.Start(host, port); err != nil {
-		log.Fatalf("relay exited: %v", err)
+		logging.Fatal("relay exited: %v", err)
 	}
 }
 

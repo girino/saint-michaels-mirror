@@ -86,6 +86,11 @@ function populateStats(data) {
   document.getElementById('relay-dead-count').textContent = data.mirror.dead_relays;
   document.getElementById('relay-total-count').textContent = data.mirror.live_relays + data.mirror.dead_relays;
 
+  // Semaphore statistics
+  document.getElementById('semaphore-capacity').textContent = data.relay.semaphore_capacity;
+  document.getElementById('semaphore-available').textContent = data.relay.semaphore_available;
+  document.getElementById('semaphore-wait-count').textContent = data.relay.semaphore_wait_count;
+
   // Health status
   const overallHealthEl = document.getElementById('health-overall');
   overallHealthEl.textContent = data.relay.main_health_state;

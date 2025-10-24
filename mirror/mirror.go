@@ -10,11 +10,11 @@ package mirror
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync/atomic"
 	"time"
 
 	"github.com/fiatjaf/khatru"
+	"github.com/girino/saint-michaels-mirror/logging"
 	"github.com/nbd-wtf/go-nostr"
 )
 
@@ -24,8 +24,6 @@ type MirrorManager struct {
 	queryUrls []string
 	// pool manages connections for query remotes
 	pool *nostr.SimplePool
-	// verbose enables debug logging
-	Verbose bool
 	// mirroring state
 	mirrorCtx      context.Context
 	mirrorCancel   context.CancelFunc
@@ -77,9 +75,7 @@ func (m *MirrorManager) Init() error {
 	// create a SimplePool for queries
 	m.pool = nostr.NewSimplePool(context.Background(), nostr.WithPenaltyBox())
 
-	if m.Verbose {
-		log.Printf("[mirror] query remotes: %v", m.queryUrls)
-	}
+	logging.DebugMethod("mirror", "Init", "query remotes: %v", m.queryUrls)
 	return nil
 }
 
@@ -126,9 +122,7 @@ func (m *MirrorManager) StartMirroring(relay *khatru.Relay) error {
 
 	if len(m.queryUrls) == 0 {
 		// No query relays configured - this is OK, relay can work without mirroring
-		if m.Verbose {
-			log.Printf("[mirror] no query relays configured, skipping mirroring")
-		}
+		logging.DebugMethod("mirror", "StartMirroring", "no query relays configured, skipping mirroring")
 		return nil
 	}
 
@@ -137,9 +131,7 @@ func (m *MirrorManager) StartMirroring(relay *khatru.Relay) error {
 	for _, url := range m.queryUrls {
 		_, err := m.pool.EnsureRelay(url)
 		if err != nil {
-			if m.Verbose {
-				log.Printf("[mirror] failed initial connect to %s: %v", url, err)
-			}
+			logging.DebugMethod("mirror", "StartMirroring", "failed initial connect to %s: %v", url, err)
 		} else {
 			liveCount++
 		}
@@ -150,9 +142,7 @@ func (m *MirrorManager) StartMirroring(relay *khatru.Relay) error {
 		return fmt.Errorf("no query relays are available (configured: %d)", len(m.queryUrls))
 	}
 
-	if m.Verbose {
-		log.Printf("[mirror] starting event mirroring from %d query relays (%d/%d available)", len(m.queryUrls), liveCount, len(m.queryUrls))
-	}
+	logging.DebugMethod("mirror", "StartMirroring", "starting event mirroring from %d query relays (%d/%d available)", len(m.queryUrls), liveCount, len(m.queryUrls))
 
 	m.mirrorCtx, m.mirrorCancel = context.WithCancel(context.Background())
 
@@ -165,9 +155,7 @@ func (m *MirrorManager) StartMirroring(relay *khatru.Relay) error {
 // StopMirroring stops the continuous mirroring of events
 func (m *MirrorManager) StopMirroring() {
 	if m.mirrorCancel != nil {
-		if m.Verbose {
-			log.Printf("[mirror] stopping event mirroring")
-		}
+		logging.DebugMethod("mirror", "StopMirroring", "stopping event mirroring")
 		m.mirrorCancel()
 		m.mirrorCtx = nil
 		m.mirrorCancel = nil
@@ -176,9 +164,7 @@ func (m *MirrorManager) StopMirroring() {
 
 // mirrorFromRelays continuously mirrors events from all query relays
 func (m *MirrorManager) mirrorFromRelays(ctx context.Context, relay *khatru.Relay) {
-	if m.Verbose {
-		log.Printf("[mirror] starting mirror from %d query relays: %v", len(m.queryUrls), m.queryUrls)
-	}
+	logging.DebugMethod("mirror", "mirrorFromRelays", "starting mirror from %d query relays: %v", len(m.queryUrls), m.queryUrls)
 
 	// create a filter that gets all events since now
 	now := nostr.Now()
@@ -193,15 +179,11 @@ func (m *MirrorManager) mirrorFromRelays(ctx context.Context, relay *khatru.Rela
 	for {
 		select {
 		case <-ctx.Done():
-			if m.Verbose {
-				log.Printf("[mirror] mirror from query relays stopped (context cancelled)")
-			}
+			logging.DebugMethod("mirror", "mirrorFromRelays", "mirror from query relays stopped (context cancelled)")
 			return
 		case relayEvent, ok := <-sub:
 			if !ok {
-				if m.Verbose {
-					log.Printf("[mirror] mirror subscription closed")
-				}
+				logging.DebugMethod("mirror", "mirrorFromRelays", "mirror subscription closed")
 				return
 			}
 
@@ -210,9 +192,7 @@ func (m *MirrorManager) mirrorFromRelays(ctx context.Context, relay *khatru.Rela
 				clientCount := relay.BroadcastEvent(relayEvent.Event)
 				atomic.AddInt64(&m.mirroredEvents, 1)
 				atomic.AddInt64(&m.mirrorSuccesses, 1)
-				if m.Verbose {
-					log.Printf("[mirror] mirrored event %s from %s to %d clients", relayEvent.Event.ID, relayEvent.Relay, clientCount)
-				}
+				logging.DebugMethod("mirror", "mirrorFromRelays", "mirrored event %s from %s to %d clients", relayEvent.Event.ID, relayEvent.Relay, clientCount)
 			}
 		}
 	}
@@ -245,9 +225,7 @@ func (m *MirrorManager) checkRelayHealth() {
 		_, err := m.pool.EnsureRelay(url)
 		if err != nil {
 			deadCount++
-			if m.Verbose {
-				log.Printf("[mirror] relay %s is dead: %v", url, err)
-			}
+			logging.DebugMethod("mirror", "monitorRelayHealth", "relay %s is dead: %v", url, err)
 		}
 	}
 
@@ -266,14 +244,10 @@ func (m *MirrorManager) checkRelayHealth() {
 		// More than half are dead - count as failure
 		atomic.AddInt64(&m.mirrorFailures, 1)
 		atomic.AddInt64(&m.consecutiveMirrorFailures, 1)
-		if m.Verbose {
-			log.Printf("[mirror] mirror health check failed: %d/%d relays dead", deadCount, totalRelays)
-		}
+		logging.DebugMethod("mirror", "monitorRelayHealth", "mirror health check failed: %d/%d relays dead", deadCount, totalRelays)
 	} else {
 		// Half or less are dead (more than half are alive) - reset failures
 		atomic.StoreInt64(&m.consecutiveMirrorFailures, 0)
-		if m.Verbose {
-			log.Printf("[mirror] mirror health check passed: %d/%d relays alive", liveCount, totalRelays)
-		}
+		logging.DebugMethod("mirror", "monitorRelayHealth", "mirror health check passed: %d/%d relays alive", liveCount, totalRelays)
 	}
 }

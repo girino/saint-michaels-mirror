@@ -1,11 +1,11 @@
 module github.com/girino/saint-michaels-mirror
 
-go 1.24.1
+go 1.25.2
 
 require (
 	github.com/fiatjaf/eventstore v0.17.2
 	github.com/fiatjaf/khatru v0.19.1
-	github.com/nbd-wtf/go-nostr v0.51.8
+	github.com/nbd-wtf/go-nostr v0.52.0
 	golang.org/x/image v0.32.0
 )
 

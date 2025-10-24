@@ -20,7 +20,7 @@ type Config struct {
 	Addr           string
 	PublishRemotes []string
 	QueryRemotes   []string
-	Verbose        bool
+	Verbose        string
 
 	RelayServiceURL  string
 	RelayName        string
@@ -45,7 +45,7 @@ func LoadConfig() *Config {
 	addr := flag.String("addr", envAddr, "address to listen on")
 	remotes := flag.String("remotes", envRemotes, "comma-separated list of remote relay URLs to forward events to (env: PUBLISH_REMOTES)")
 	queryRemotes := flag.String("query-remotes", envQueryRemotes, "comma-separated list of remote relay URLs to use for queries/subscriptions (env: QUERY_REMOTES)")
-	verbose := flag.Bool("verbose", envVerbose == "1" || strings.ToLower(envVerbose) == "true", "enable verbose/debug logging (env: VERBOSE)")
+	verbose := flag.String("verbose", envVerbose, "verbose logging control: '1'/'true' for all, 'relaystore' for module, 'relaystore.QueryEvents,mirror' for specific methods (env: VERBOSE)")
 	flag.Parse()
 
 	pub := []string{}
