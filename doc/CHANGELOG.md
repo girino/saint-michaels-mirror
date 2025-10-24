@@ -2,6 +2,47 @@
 
 Instruction for AI agents editing this file: prioritize human-friendly, user-facing functionality; de-emphasize CI/CD and infrastructure-only changes.
 
+## v1.3.0 — 2025-01-23
+
+### 🚀 Major Logging Refactoring
+- **Centralized Logging System**: Replaced all 76+ log statements with a new structured logging package providing granular verbose control and consistent formatting.
+- **Environment-Based Configuration**: Verbose logging can now be controlled via `VERBOSE` environment variable or `--verbose` command-line flag with module-specific filtering.
+- **Enhanced Debugging**: Support for granular verbose control (e.g., `VERBOSE=relaystore`, `VERBOSE=relaystore.QueryEvents,mirror`) for targeted debugging.
+
+### ⚡ Concurrency Control & Performance
+- **Semaphore Implementation**: Added semaphore to limit concurrent FetchMany operations to 20 simultaneous calls, preventing upstream relay overload.
+- **Real-time Semaphore Monitoring**: Added semaphore statistics to the `/stats` page showing capacity, available slots, and wait counts.
+- **Improved Query Performance**: Better resource management and contention tracking for query operations.
+
+### 🔧 Configuration & Usability
+- **Enhanced Verbose Control**: 
+  - `VERBOSE=1` or `VERBOSE=true`: Enable all verbose logging
+  - `VERBOSE=relaystore`: Enable verbose for relaystore module only
+  - `VERBOSE=relaystore.QueryEvents,mirror`: Enable specific methods and modules
+  - `VERBOSE=`: Disable all verbose logging (default)
+- **Command-Line Override**: Verbose settings can be overridden with `--verbose` flag
+- **Cleaner Configuration**: Removed deprecated `Verbose` fields from internal structs
+
+### 📊 Enhanced Monitoring
+- **Semaphore Statistics**: New "Concurrency Control" section on stats page showing:
+  - Semaphore Capacity: Total concurrent operations allowed (20)
+  - Semaphore Available: Currently available slots
+  - Semaphore Wait Count: Queries waiting for semaphore slots
+- **Better Performance Insights**: Monitor semaphore contention to identify bottlenecks
+- **Real-time Updates**: Semaphore statistics auto-refresh every 10 seconds
+
+### 🛠️ Technical Improvements
+- **Centralized Error Handling**: Added `logging.Fatal()` function for consistent error handling and application exit
+- **Cleaner Code**: Removed repetitive verbose conditionals throughout the codebase
+- **Better Performance**: Verbose filtering handled efficiently by the logging package
+- **Consistent API**: All logging now uses the same structured format with module.method prefixes
+
+### 🔍 Developer Experience
+- **Granular Debugging**: Debug specific modules or methods without enabling all verbose logging
+- **Environment Integration**: Perfect for Docker containers, systemd services, and CI/CD pipelines
+- **Better Troubleshooting**: Clear module.method prefixes make it easier to identify log sources
+- **Flexible Configuration**: Support for both environment variables and command-line flags
+
 ## v1.2.1 — 2025-01-22
 
 ### 🐛 Bug Fixes

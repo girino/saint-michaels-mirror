@@ -113,7 +113,7 @@ COMPOSE_RELAY_PORT=3337
 | `RELAY_BANNER` | ❌ | Path to relay banner | - |
 | `RELAY_SECKEY` | ❌ | Relay secret key (hex or nsec) for authentication | - |
 | `ADDR` | ❌ | Address to listen on | `:3337` |
-| `VERBOSE` | ❌ | Enable verbose logging (1/0) | `0` |
+| `VERBOSE` | ❌ | Enable verbose logging (1/true/all for all, module names for specific modules, comma-separated for multiple) | `0` |
 | `PROD_IMAGE` | ❌ | Docker image for compose | `latest` |
 
 ## 🔐 Authentication & Mirroring Features
@@ -177,6 +177,7 @@ The relay monitors its own health and reports status:
 - **Failure Tracking**: Consecutive failure counts with automatic recovery
 - **Mirroring Statistics**: Mirrored events, mirror attempts, successes, and failures
 - **Relay Health**: Live/dead relay counts and mirroring health state
+- **Concurrency Control**: Semaphore capacity, available slots, and wait counts for query operations
 
 ## 🏗️ Architecture
 
@@ -221,6 +222,70 @@ go test -v ./...
 
 # Run with verbose logging
 VERBOSE=1 ./bin/saint-michaels-mirror
+```
+
+## 🔍 Verbose Logging & Debugging
+
+The relay supports granular verbose logging for debugging and monitoring:
+
+### Environment Variable Control
+
+```bash
+# Enable all verbose logging
+VERBOSE=1
+VERBOSE=true
+VERBOSE=all
+
+# Enable specific modules
+VERBOSE=relaystore
+VERBOSE=mirror
+VERBOSE=main
+
+# Enable specific methods
+VERBOSE=relaystore.QueryEvents
+VERBOSE=mirror.StartMirroring
+
+# Enable multiple modules/methods
+VERBOSE=relaystore.QueryEvents,mirror,main
+
+# Disable verbose logging (default)
+VERBOSE=
+VERBOSE=0
+VERBOSE=false
+```
+
+### Command-Line Override
+
+```bash
+# Override environment variable
+./saint-michaels-mirror --verbose=relaystore.QueryEvents
+
+# Use environment variable
+VERBOSE=mirror ./saint-michaels-mirror
+```
+
+### Docker Usage
+
+```bash
+# Enable all verbose logging
+docker run -e VERBOSE=1 ghcr.io/girino/saint-michaels-mirror:latest
+
+# Enable specific module
+docker run -e VERBOSE=relaystore ghcr.io/girino/saint-michaels-mirror:latest
+
+# Multiple modules
+docker run -e VERBOSE=relaystore,mirror ghcr.io/girino/saint-michaels-mirror:latest
+```
+
+### Log Format
+
+Verbose logs use structured format with module.method prefixes:
+
+```
+[DEBUG] relaystore.QueryEvents: attempting semaphore acquisition (wait count: 5)
+[DEBUG] relaystore.QueryEvents: acquired semaphore for FetchMany (remaining slots: 19)
+[INFO] mirror.StartMirroring: starting mirroring for relay wss://relay.example.com
+[WARN] main: connection rate limited for IP 192.168.1.100
 ```
 
 ### Docker Development
@@ -279,6 +344,17 @@ Contributions are welcome! Please:
 - Update documentation as needed
 - Ensure all tests pass
 - Follow the existing code style
+
+## 📚 Documentation
+
+Complete documentation is available in the [doc/](doc/) directory:
+
+- **[CHANGELOG.md](doc/CHANGELOG.md)** - Version history and release notes
+- **[DEPLOYMENT.md](doc/DEPLOYMENT.md)** - Deployment guide and configuration
+- **[MIGRATION_GUIDE_v1.3.0.md](doc/MIGRATION_GUIDE_v1.3.0.md)** - Step-by-step migration instructions
+- **[RELEASE_NOTES_v1.3.0.md](doc/RELEASE_NOTES_v1.3.0.md)** - Comprehensive release documentation
+- **[VERBOSE_LOGGING_QUICK_REFERENCE.md](doc/VERBOSE_LOGGING_QUICK_REFERENCE.md)** - Quick reference for verbose logging
+- **[DOCUMENTATION_UPDATE_SUMMARY.md](doc/DOCUMENTATION_UPDATE_SUMMARY.md)** - Summary of documentation changes
 
 ## 📄 License
 
