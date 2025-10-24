@@ -105,8 +105,6 @@ type RelayStore struct {
 	publishTimeout time.Duration
 	// relaySecKey is the private key used for authenticating to upstream relays
 	relaySecKey string
-	// semaphore limits concurrent FetchMany calls
-	fetchSemaphore chan struct{}
 	// stats
 	publishAttempts     int64
 	publishSuccesses    int64
@@ -116,8 +114,6 @@ type RelayStore struct {
 	queryExternal       int64
 	queryEventsReturned int64
 	queryFailures       int64
-	// semaphore contention stats
-	semaphoreWaitCount int64
 	// separate counters for CountEvents
 	countRequests       int64
 	countInternal       int64
@@ -171,10 +167,6 @@ type Stats struct {
 	TotalPublishDurationMs   int64   `json:"total_publish_duration_ms"`
 	TotalQueryDurationMs     int64   `json:"total_query_duration_ms"`
 	TotalCountDurationMs     int64   `json:"total_count_duration_ms"`
-	// Semaphore statistics
-	SemaphoreCapacity  int   `json:"semaphore_capacity"`
-	SemaphoreAvailable int   `json:"semaphore_available"`
-	SemaphoreWaitCount int64 `json:"semaphore_wait_count"`
 }
 
 // getHealthState determines the health state based on consecutive failures
@@ -265,10 +257,6 @@ func (r *RelayStore) Stats() Stats {
 		TotalPublishDurationMs:   totalPublishDurationNs / 1e6, // Convert ns to ms
 		TotalQueryDurationMs:     totalQueryDurationNs / 1e6,   // Convert ns to ms
 		TotalCountDurationMs:     totalCountDurationNs / 1e6,   // Convert ns to ms
-		// Semaphore statistics
-		SemaphoreCapacity:  cap(r.fetchSemaphore),
-		SemaphoreAvailable: cap(r.fetchSemaphore) - len(r.fetchSemaphore),
-		SemaphoreWaitCount: atomic.LoadInt64(&r.semaphoreWaitCount),
 	}
 }
 
@@ -285,35 +273,11 @@ func New(queryUrls []string, publishUrls []string, relaySecKey string) *RelaySto
 		publishTimeout:         7 * time.Second,
 		maxConsecutiveFailures: 10, // Default threshold: 10 consecutive failures
 		relaySecKey:            relaySecKey,
-		fetchSemaphore:         make(chan struct{}, 20), // Limit to 20 concurrent FetchMany calls
 	}
 	return rs
 }
 
 func (r *RelayStore) Init() error {
-	// Attempt to connect to provided relays asynchronously (best-effort)
-	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
-	defer cancel()
-	for _, u := range r.urls {
-		u = strings.TrimSpace(u)
-		if u == "" {
-			continue
-		}
-		go func(url string) {
-			logging.DebugMethod("relaystore", "Init", "attempting initial connect to %s", url)
-			rl, err := nostr.RelayConnect(ctx, url)
-			if err != nil {
-				logging.DebugMethod("relaystore", "Init", "failed initial connect to %s: %v", url, err)
-				// store nothing on failure; we'll attempt reconnects later on publish
-				return
-			}
-			r.mu.Lock()
-			r.relays[url] = rl
-			r.mu.Unlock()
-			logging.DebugMethod("relaystore", "Init", "connected to %s", url)
-		}(u)
-	}
-
 	// setup query pool: create pool even if no queryUrls provided
 	// create a SimplePool for queries
 	r.pool = nostr.NewSimplePool(context.Background(), nostr.WithPenaltyBox())
@@ -489,67 +453,22 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 	// Start timing measurement for the complete query operation
 	startTime := time.Now()
 
-	// before subscribing, try ensuring relays to detect quick failures and count them
-	queryFailures := 0
-	for _, q := range r.queryUrls {
-		if q == "" {
-			continue
-		}
-		if _, err := r.pool.EnsureRelay(q); err != nil {
-			// count query relay failure
-			atomic.AddInt64(&r.queryFailures, 1)
-			queryFailures++
-			logging.DebugMethod("relaystore", "QueryEvents", "failed to ensure query relay %s: %v", q, err)
-		}
-	}
-
-	// Track consecutive query failures for health checking
-	if queryFailures == 0 {
-		// Success: reset consecutive failure counter
-		atomic.StoreInt64(&r.consecutiveQueryFailures, 0)
-	} else {
-		// Failure: increment consecutive failure counter
-		atomic.AddInt64(&r.consecutiveQueryFailures, 1)
-	}
-
-	// Acquire semaphore to limit concurrent FetchMany calls
-	// Increment wait counter before attempting acquisition
-	atomic.AddInt64(&r.semaphoreWaitCount, 1)
-	logging.DebugMethod("relaystore", "QueryEvents", "attempting semaphore acquisition (wait count: %d)", atomic.LoadInt64(&r.semaphoreWaitCount))
-
-	select {
-	case r.fetchSemaphore <- struct{}{}:
-		// Semaphore acquired successfully - decrement wait counter
-		atomic.AddInt64(&r.semaphoreWaitCount, -1)
-		logging.DebugMethod("relaystore", "QueryEvents", "acquired semaphore for FetchMany (remaining slots: %d)", cap(r.fetchSemaphore)-len(r.fetchSemaphore))
-	case <-ctx.Done():
-		// Context cancelled - decrement wait counter
-		atomic.AddInt64(&r.semaphoreWaitCount, -1)
-		logging.DebugMethod("relaystore", "QueryEvents", "query context cancelled while acquiring semaphore")
-		return nil, ctx.Err()
-	}
-
 	// 3 seconds or cancel - timeout starts AFTER semaphore acquisition
-	timeoutCtx, cancel := context.WithTimeout(ctx, time.Second*3)
-
+	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, time.Second*3)
 	evch := r.pool.FetchMany(timeoutCtx, r.queryUrls, filter)
 	out := make(chan *nostr.Event)
 
 	go func() {
-		// Release semaphore when goroutine completes
-		defer func() {
-			<-r.fetchSemaphore
-			logging.DebugMethod("relaystore", "QueryEvents", "released semaphore for FetchMany (remaining slots: %d)", cap(r.fetchSemaphore)-len(r.fetchSemaphore))
-		}()
-
 		// Complete timing measurement for the complete query operation
-		defer cancel()
+		defer timeoutCancel()
 		defer func() {
 			duration := time.Since(startTime)
 			atomic.AddInt64(&r.totalQueryDurationNs, duration.Nanoseconds())
 			atomic.AddInt64(&r.queryCount, 1)
 		}()
 		defer close(out)
+		// force clsoe the upstream channel, just in case.
+		defer close(evch)
 
 		maxEvents := 100
 		if filter.Limit > 0 {
@@ -566,19 +485,17 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 					logging.DebugMethod("relaystore", "QueryEvents", "query channel closed")
 					return
 				}
-				if ie.Event != nil {
-					atomic.AddInt64(&r.queryEventsReturned, 1)
-					select {
-					case out <- ie.Event:
-						numEvents++ // Event sent successfully
-						if numEvents >= maxEvents {
-							logging.DebugMethod("relaystore", "QueryEvents", "query reached max events limit of %d", maxEvents)
-							return
-						}
-					case <-timeoutCtx.Done():
-						logging.Warn("query timed out after 3 seconds")
+				atomic.AddInt64(&r.queryEventsReturned, 1)
+				select {
+				case out <- ie.Event:
+					numEvents++ // Event sent successfully
+					if numEvents >= maxEvents {
+						logging.DebugMethod("relaystore", "QueryEvents", "query reached max events limit of %d", maxEvents)
 						return
 					}
+				case <-timeoutCtx.Done():
+					logging.Warn("query timed out after 3 seconds")
+					return
 				}
 			}
 		}
@@ -749,27 +666,6 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 	if len(r.countableQueryUrls) == 0 {
 		logging.DebugMethod("relaystore", "CountEvents", "no NIP-45-capable query remotes available; returning 0")
 		return 0, nil
-	}
-
-	countFailures := 0
-	for _, q := range r.countableQueryUrls {
-		if q == "" {
-			continue
-		}
-		if _, err := r.pool.EnsureRelay(q); err != nil {
-			atomic.AddInt64(&r.countFailures, 1)
-			countFailures++
-			logging.DebugMethod("relaystore", "CountEvents", "failed to ensure query relay %s: %v", q, err)
-		}
-	}
-
-	// Track consecutive count failures for health checking
-	if countFailures == 0 {
-		// Success: reset consecutive failure counter
-		atomic.StoreInt64(&r.consecutiveQueryFailures, 0)
-	} else {
-		// Failure: increment consecutive failure counter
-		atomic.AddInt64(&r.consecutiveQueryFailures, 1)
 	}
 
 	// use CountMany which aggregates counts across relays (NIP-45 HyperLogLog)
