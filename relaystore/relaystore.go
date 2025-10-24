@@ -109,6 +109,8 @@ type RelayStore struct {
 	Verbose bool
 	// relaySecKey is the private key used for authenticating to upstream relays
 	relaySecKey string
+	// semaphore limits concurrent FetchMany calls
+	fetchSemaphore chan struct{}
 	// stats
 	publishAttempts     int64
 	publishSuccesses    int64
@@ -118,6 +120,8 @@ type RelayStore struct {
 	queryExternal       int64
 	queryEventsReturned int64
 	queryFailures       int64
+	// semaphore contention stats
+	semaphoreWaitCount int64
 	// separate counters for CountEvents
 	countRequests       int64
 	countInternal       int64
@@ -171,6 +175,10 @@ type Stats struct {
 	TotalPublishDurationMs   int64   `json:"total_publish_duration_ms"`
 	TotalQueryDurationMs     int64   `json:"total_query_duration_ms"`
 	TotalCountDurationMs     int64   `json:"total_count_duration_ms"`
+	// Semaphore statistics
+	SemaphoreCapacity  int   `json:"semaphore_capacity"`
+	SemaphoreAvailable int   `json:"semaphore_available"`
+	SemaphoreWaitCount int64 `json:"semaphore_wait_count"`
 }
 
 // getHealthState determines the health state based on consecutive failures
@@ -261,6 +269,10 @@ func (r *RelayStore) Stats() Stats {
 		TotalPublishDurationMs:   totalPublishDurationNs / 1e6, // Convert ns to ms
 		TotalQueryDurationMs:     totalQueryDurationNs / 1e6,   // Convert ns to ms
 		TotalCountDurationMs:     totalCountDurationNs / 1e6,   // Convert ns to ms
+		// Semaphore statistics
+		SemaphoreCapacity:  cap(r.fetchSemaphore),
+		SemaphoreAvailable: cap(r.fetchSemaphore) - len(r.fetchSemaphore),
+		SemaphoreWaitCount: atomic.LoadInt64(&r.semaphoreWaitCount),
 	}
 }
 
@@ -277,6 +289,7 @@ func New(queryUrls []string, publishUrls []string, relaySecKey string) *RelaySto
 		publishTimeout:         7 * time.Second,
 		maxConsecutiveFailures: 10, // Default threshold: 10 consecutive failures
 		relaySecKey:            relaySecKey,
+		fetchSemaphore:         make(chan struct{}, 20), // Limit to 20 concurrent FetchMany calls
 	}
 	return rs
 }
@@ -547,12 +560,44 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 		atomic.AddInt64(&r.consecutiveQueryFailures, 1)
 	}
 
-	// 3 seconds or cancel
+	// Acquire semaphore to limit concurrent FetchMany calls
+	// Increment wait counter before attempting acquisition
+	atomic.AddInt64(&r.semaphoreWaitCount, 1)
+	if r.Verbose {
+		log.Printf("[relaystore][DEBUG] attempting semaphore acquisition (wait count: %d)", atomic.LoadInt64(&r.semaphoreWaitCount))
+	}
+
+	select {
+	case r.fetchSemaphore <- struct{}{}:
+		// Semaphore acquired successfully - decrement wait counter
+		atomic.AddInt64(&r.semaphoreWaitCount, -1)
+		if r.Verbose {
+			log.Printf("[relaystore][DEBUG] acquired semaphore for FetchMany (remaining slots: %d)", cap(r.fetchSemaphore)-len(r.fetchSemaphore))
+		}
+	case <-ctx.Done():
+		// Context cancelled - decrement wait counter
+		atomic.AddInt64(&r.semaphoreWaitCount, -1)
+		if r.Verbose {
+			log.Printf("[relaystore][WARN] query context cancelled while acquiring semaphore")
+		}
+		return nil, ctx.Err()
+	}
+
+	// 3 seconds or cancel - timeout starts AFTER semaphore acquisition
 	timeoutCtx, cancel := context.WithTimeout(ctx, time.Second*3)
+
 	evch := r.pool.FetchMany(timeoutCtx, r.queryUrls, filter)
 	out := make(chan *nostr.Event)
 
 	go func() {
+		// Release semaphore when goroutine completes
+		defer func() {
+			<-r.fetchSemaphore
+			if r.Verbose {
+				log.Printf("[relaystore][DEBUG] released semaphore for FetchMany (remaining slots: %d)", cap(r.fetchSemaphore)-len(r.fetchSemaphore))
+			}
+		}()
+
 		// Complete timing measurement for the complete query operation
 		defer cancel()
 		defer func() {
