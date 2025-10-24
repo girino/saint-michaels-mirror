@@ -467,8 +467,6 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 			atomic.AddInt64(&r.queryCount, 1)
 		}()
 		defer close(out)
-		// force clsoe the upstream channel, just in case.
-		defer close(evch)
 
 		maxEvents := 100
 		if filter.Limit > 0 {
