@@ -137,10 +137,6 @@ type RelayStore struct {
 	publishCount           int64
 	queryCount             int64
 	countCount             int64
-	// kind 5 deletion request caching - keyed by blocked events for efficient lookup
-	kind5BlockedEvents map[string]time.Time // key: "kind:author", value: expiration time
-	kind5CacheMu       sync.RWMutex
-	kind5CacheDelay    time.Duration
 }
 
 // Stats holds runtime counters exported by RelayStore
@@ -281,8 +277,6 @@ func New(queryUrls []string, publishUrls []string, relaySecKey string) *RelaySto
 		publishTimeout:         7 * time.Second,
 		maxConsecutiveFailures: 10, // Default threshold: 10 consecutive failures
 		relaySecKey:            relaySecKey,
-		kind5BlockedEvents:     make(map[string]time.Time),
-		kind5CacheDelay:        3 * time.Second, // Cache for 3 seconds
 	}
 	return rs
 }
@@ -568,6 +562,11 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 		}()
 		defer close(out)
 
+		maxEvents := 100
+		if filter.Limit > 0 {
+			maxEvents = int(filter.Limit)
+		}
+		numEvents := 0
 		for {
 			select {
 			case <-timeoutCtx.Done():
@@ -575,14 +574,22 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 				return
 			case ie, ok := <-evch:
 				if !ok {
-					log.Printf("[relaystore][WARN] query channel closed")
+					if r.Verbose {
+						log.Printf("[relaystore][WARN] query channel closed")
+					}
 					return
 				}
 				if ie.Event != nil {
 					atomic.AddInt64(&r.queryEventsReturned, 1)
 					select {
 					case out <- ie.Event:
-						// Event sent successfully
+						numEvents++ // Event sent successfully
+						if numEvents >= maxEvents {
+							if r.Verbose {
+								log.Printf("[relaystore][WARN] query reached max events limit of %d", maxEvents)
+							}
+							return
+						}
 					case <-timeoutCtx.Done():
 						log.Printf("[relaystore][WARN] query timed out after 3 seconds")
 						return
@@ -819,128 +826,3 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 // Ensure RelayStore implements eventstore.Store and eventstore.Counter
 var _ eventstore.Store = (*RelayStore)(nil)
 var _ eventstore.Counter = (*RelayStore)(nil)
-
-// isAddingKind5Filter detects the exact filter literal used in khatru's
-// adding.go deletion-check: {Kinds: []int{5}, Tags: TagMap{"#e": []string{id}}}
-func isKind5ForRegularEvents(f nostr.Filter) bool {
-	if len(f.Kinds) != 1 || f.Kinds[0] != 5 {
-		return false
-	}
-	if len(f.Tags) != 1 {
-		return false
-	}
-	if vs, ok := f.Tags["#e"]; ok {
-		return len(vs) == 1 && len(f.Authors) == 0 && f.Since == nil && f.Until == nil && len(f.IDs) == 0
-	}
-	return false
-}
-
-// parseKindAndAuthorFromFilter extracts blocked events from ##a tags in kind 5 requests
-func parseKindAndAuthorFromFilter(filter nostr.Filter) []string {
-	var blockedKeys []string
-
-	tags, ok := filter.Tags["#a"]
-	if ok && len(tags) > 0 {
-		tag := tags[0]
-		blockedKeys = append(blockedKeys, tags...)
-		if len(tag) > 0 && tag[len(tag)-1] != ':' {
-			// tag is in format xxx:xxx:xxx, remove the last part, after the last :
-			tagNoAddress := tag[:strings.LastIndex(tag, ":")] + ":"
-			blockedKeys = append(blockedKeys, tagNoAddress)
-		}
-	}
-	return blockedKeys
-}
-
-// isBlockedreplaceableEvent checks if a request should be blocked based on cached kind 5 deletion requests
-func (r *RelayStore) isBlockedreplaceableEvent(filter nostr.Filter) bool {
-	// Only check if this is a single-kind, single-author request
-	if len(filter.Kinds) != 1 || len(filter.Authors) != 1 {
-		return false
-	}
-
-	kind := filter.Kinds[0]
-	author := filter.Authors[0]
-	// has addressable tags
-	blockedKey := fmt.Sprintf("%d:%s:", kind, author)
-
-	if tag, ok := filter.Tags["d"]; ok && len(tag) > 0 {
-		// already have a trailing :
-		blockedKey = fmt.Sprintf("%s%s", blockedKey, tag[0])
-	}
-
-	// Create a key to check if this kind:author combination is blocked, has trailing :
-
-	r.kind5CacheMu.RLock()
-	defer r.kind5CacheMu.RUnlock()
-
-	// Direct O(1) lookup for blocked events
-	if expirationTime, exists := r.kind5BlockedEvents[blockedKey]; exists {
-		// Check if the entry is still valid (not expired)
-		if time.Now().Before(expirationTime) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// isKind5ForReplaceableEvents checks if this is a kind 5 deletion request that should be cached
-func isKind5ForReplaceableEvents(filter nostr.Filter) bool {
-
-	if len(filter.Kinds) != 1 || filter.Kinds[0] != 5 {
-		return false
-	}
-
-	// Check for "since" filter to ensure it's an internal request
-	if filter.Since == nil {
-		return false
-	}
-
-	// Check for ##a tags (deletion patterns), they are tags with key "#a"
-	if len(filter.Tags) > 0 {
-		_, ok := filter.Tags["#a"]
-		if ok {
-			return true
-		}
-	}
-	return false
-}
-
-// handleKind5Caching manages the caching of kind 5 deletion requests
-func (r *RelayStore) handleAddressableEventsCaching(filter nostr.Filter) {
-	// Parse blocked events from the kind 5 request
-	blockedKeys := parseKindAndAuthorFromFilter(filter)
-
-	r.kind5CacheMu.Lock()
-	defer r.kind5CacheMu.Unlock()
-
-	// Add each blocked event to the cache with expiration time
-	expirationTime := time.Now().Add(r.kind5CacheDelay)
-	for _, blockedKey := range blockedKeys {
-		r.kind5BlockedEvents[blockedKey] = expirationTime
-		// Start a goroutine to handle the delayed cleanup for this specific key
-		go r.cleanupKind5Cache(blockedKey)
-	}
-
-	if r.Verbose {
-		log.Printf("[relaystore][DEBUG] kind 5 request cached with blocked events: %v", blockedKeys)
-	}
-
-}
-
-// cleanupKind5Cache removes a specific blocked event after delay
-func (r *RelayStore) cleanupKind5Cache(blockedKey string) {
-	// Wait for the cache delay
-	time.Sleep(r.kind5CacheDelay)
-
-	r.kind5CacheMu.Lock()
-	defer r.kind5CacheMu.Unlock()
-
-	// Remove the specific blocked event
-	delete(r.kind5BlockedEvents, blockedKey)
-
-	if r.Verbose {
-		log.Printf("[relaystore][DEBUG] kind 5 blocked event cleaned up: %s", blockedKey)
-	}
-}
