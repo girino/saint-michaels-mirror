@@ -60,60 +60,69 @@ function showStats() {
 
 function populateStats(data) {
   // Application stats
-  document.getElementById('app-version').textContent = data.app.version;
-  document.getElementById('app-uptime').textContent = `${Math.floor(data.app.uptime / 60)}m ${Math.floor(data.app.uptime % 60)}s`;
-  document.getElementById('app-goroutines').textContent = data.app.goroutines;
-  document.getElementById('app-memory-used').textContent = formatBytes(data.app.memory.heap_alloc_bytes);
-  document.getElementById('app-memory-total').textContent = formatBytes(data.app.memory.sys_bytes);
-  document.getElementById('app-gc-cycles').textContent = data.app.gc.cycles;
+  document.getElementById('app-version').textContent = data.app?.version || '-';
+  document.getElementById('app-uptime').textContent = `${Math.floor((data.app?.uptime || 0) / 60)}m ${Math.floor((data.app?.uptime || 0) % 60)}s`;
+  document.getElementById('app-goroutines').textContent = data.app?.goroutines || '-';
+  document.getElementById('app-memory-used').textContent = formatBytes(data.app?.memory?.heap_alloc_bytes || 0);
+  document.getElementById('app-memory-total').textContent = formatBytes(data.app?.memory?.sys_bytes || 0);
+  document.getElementById('app-gc-cycles').textContent = data.app?.gc?.cycles || '-';
 
   // Relay operations
-  document.getElementById('relay-publish-attempts').textContent = data.relay.publish_attempts;
-  document.getElementById('relay-publish-successes').textContent = data.relay.publish_successes;
-  document.getElementById('relay-publish-failures').textContent = data.relay.publish_failures;
-  document.getElementById('relay-query-requests').textContent = data.relay.query_requests;
-  document.getElementById('relay-query-events').textContent = data.relay.query_events_returned;
-  document.getElementById('relay-count-requests').textContent = data.relay.count_requests;
+  document.getElementById('relay-publish-attempts').textContent = data.relay?.publish_attempts || '-';
+  document.getElementById('relay-publish-successes').textContent = data.relay?.publish_successes || '-';
+  document.getElementById('relay-publish-failures').textContent = data.relay?.publish_failures || '-';
+  document.getElementById('relay-query-requests').textContent = data.relay?.query_requests || '-';
+  document.getElementById('relay-query-events').textContent = data.relay?.query_events_returned || '-';
+  document.getElementById('relay-count-requests').textContent = data.relay?.count_requests || '-';
 
   // Mirroring operations
-  document.getElementById('relay-mirrored-events').textContent = data.mirror.mirrored_events;
-  document.getElementById('relay-mirror-attempts').textContent = data.mirror.mirror_attempts;
-  document.getElementById('relay-mirror-successes').textContent = data.mirror.mirror_successes;
-  document.getElementById('relay-mirror-failures').textContent = data.mirror.mirror_failures;
+  document.getElementById('relay-mirrored-events').textContent = data.mirror?.mirrored_events || '-';
+  document.getElementById('relay-mirror-attempts').textContent = data.mirror?.mirror_attempts || '-';
+  document.getElementById('relay-mirror-successes').textContent = data.mirror?.mirror_successes || '-';
+  document.getElementById('relay-mirror-failures').textContent = data.mirror?.mirror_failures || '-';
 
   // Relay health
-  document.getElementById('relay-live-count').textContent = data.mirror.live_relays;
-  document.getElementById('relay-dead-count').textContent = data.mirror.dead_relays;
-  document.getElementById('relay-total-count').textContent = data.mirror.live_relays + data.mirror.dead_relays;
+  document.getElementById('relay-live-count').textContent = data.mirror?.live_relays || '-';
+  document.getElementById('relay-dead-count').textContent = data.mirror?.dead_relays || '-';
+  document.getElementById('relay-total-count').textContent = (data.mirror?.live_relays || 0) + (data.mirror?.dead_relays || 0);
 
   // Health status
   const overallHealthEl = document.getElementById('health-overall');
-  overallHealthEl.textContent = data.relay.main_health_state;
-  overallHealthEl.className = `health-indicator ${getHealthClass(data.relay.main_health_state)}`;
+  const overallHealthState = data.relay?.main_health_state || 'UNKNOWN';
+  overallHealthEl.textContent = overallHealthState;
+  overallHealthEl.className = `health-indicator ${getHealthClass(overallHealthState)}`;
 
   const publishHealthEl = document.getElementById('health-publish');
-  publishHealthEl.textContent = data.relay.publish_health_state;
-  publishHealthEl.className = `health-indicator ${getHealthClass(data.relay.publish_health_state)}`;
+  const publishHealthState = data.relay?.publish_health_state || 'UNKNOWN';
+  publishHealthEl.textContent = publishHealthState;
+  publishHealthEl.className = `health-indicator ${getHealthClass(publishHealthState)}`;
 
   const queryHealthEl = document.getElementById('health-query');
-  queryHealthEl.textContent = data.relay.query_health_state;
-  queryHealthEl.className = `health-indicator ${getHealthClass(data.relay.query_health_state)}`;
+  const queryHealthState = data.relay?.query_health_state || 'UNKNOWN';
+  queryHealthEl.textContent = queryHealthState;
+  queryHealthEl.className = `health-indicator ${getHealthClass(queryHealthState)}`;
 
   const mirrorHealthEl = document.getElementById('health-mirror');
-  mirrorHealthEl.textContent = data.mirror.mirror_health_state;
-  mirrorHealthEl.className = `health-indicator ${getHealthClass(data.mirror.mirror_health_state)}`;
+  const mirrorHealthState = data.mirror?.mirror_health_state || 'UNKNOWN';
+  mirrorHealthEl.textContent = mirrorHealthState;
+  mirrorHealthEl.className = `health-indicator ${getHealthClass(mirrorHealthState)}`;
 
-  document.getElementById('health-publish-failures').textContent = data.relay.consecutive_publish_failures;
-  document.getElementById('health-query-failures').textContent = data.relay.consecutive_query_failures;
-  document.getElementById('health-mirror-failures').textContent = data.mirror.consecutive_mirror_failures;
+  const goroutineHealthEl = document.getElementById('health-goroutines');
+  const goroutineHealthState = data.app?.goroutine_health_state || 'UNKNOWN';
+  goroutineHealthEl.textContent = goroutineHealthState;
+  goroutineHealthEl.className = `health-indicator ${getHealthClass(goroutineHealthState)}`;
+
+  document.getElementById('health-publish-failures').textContent = data.relay?.consecutive_publish_failures || '-';
+  document.getElementById('health-query-failures').textContent = data.relay?.consecutive_query_failures || '-';
+  document.getElementById('health-mirror-failures').textContent = data.mirror?.consecutive_mirror_failures || '-';
 
   // Performance
-  document.getElementById('perf-publish-avg').textContent = formatDuration(data.relay.average_publish_duration_ms);
-  document.getElementById('perf-query-avg').textContent = formatDuration(data.relay.average_query_duration_ms);
-  document.getElementById('perf-count-avg').textContent = formatDuration(data.relay.average_count_duration_ms);
-  document.getElementById('perf-publish-total').textContent = formatDuration(data.relay.total_publish_duration_ms);
-  document.getElementById('perf-query-total').textContent = formatDuration(data.relay.total_query_duration_ms);
-  document.getElementById('perf-count-total').textContent = formatDuration(data.relay.total_count_duration_ms);
+  document.getElementById('perf-publish-avg').textContent = formatDuration(data.relay?.average_publish_duration_ms || 0);
+  document.getElementById('perf-query-avg').textContent = formatDuration(data.relay?.average_query_duration_ms || 0);
+  document.getElementById('perf-count-avg').textContent = formatDuration(data.relay?.average_count_duration_ms || 0);
+  document.getElementById('perf-publish-total').textContent = formatDuration(data.relay?.total_publish_duration_ms || 0);
+  document.getElementById('perf-query-total').textContent = formatDuration(data.relay?.total_query_duration_ms || 0);
+  document.getElementById('perf-count-total').textContent = formatDuration(data.relay?.total_count_duration_ms || 0);
 }
 
 async function loadStats() {

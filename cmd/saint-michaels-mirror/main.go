@@ -29,6 +29,29 @@ import (
 	nip19 "github.com/nbd-wtf/go-nostr/nip19"
 )
 
+// Goroutine health thresholds
+const (
+	GoroutineYellowThreshold = 30000  // 30k goroutines = yellow health
+	GoroutineRedThreshold    = 100000 // 100k goroutines = red health
+)
+
+// Health state constants
+const (
+	HealthGreen  = "GREEN"
+	HealthYellow = "YELLOW"
+	HealthRed    = "RED"
+)
+
+// getGoroutineHealthState determines the health state based on goroutine count
+func getGoroutineHealthState(goroutineCount int) string {
+	if goroutineCount >= GoroutineRedThreshold {
+		return HealthRed
+	} else if goroutineCount >= GoroutineYellowThreshold {
+		return HealthYellow
+	}
+	return HealthGreen
+}
+
 func main() {
 	// Track start time for uptime calculation
 	startTime := time.Now()
@@ -220,6 +243,10 @@ func main() {
 		var m runtime.MemStats
 		runtime.ReadMemStats(&m)
 
+		// Get goroutine health state
+		goroutineCount := runtime.NumGoroutine()
+		goroutineHealthState := getGoroutineHealthState(goroutineCount)
+
 		// Build comprehensive stats response
 		stats := map[string]interface{}{
 			// Relay store stats
@@ -230,9 +257,10 @@ func main() {
 
 			// Application runtime stats
 			"app": map[string]interface{}{
-				"version":    Version,
-				"uptime":     time.Since(startTime).Seconds(),
-				"goroutines": runtime.NumGoroutine(),
+				"version":                Version,
+				"uptime":                 time.Since(startTime).Seconds(),
+				"goroutines":             goroutineCount,
+				"goroutine_health_state": goroutineHealthState,
 				"memory": map[string]interface{}{
 					"alloc_bytes":       m.Alloc,
 					"total_alloc_bytes": m.TotalAlloc,
