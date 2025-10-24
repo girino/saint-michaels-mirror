@@ -498,45 +498,10 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 	atomic.AddInt64(&r.queryRequests, 1)
 
 	// If khatru explicitly marked this as an internal call, short-circuit.
-	if khatru.IsInternalCall(ctx) {
+	if khatru.IsInternalCall(ctx) || ctx.Value(1) != nil {
 		atomic.AddInt64(&r.queryInternal, 1)
 		if r.Verbose {
 			log.Printf("[relaystore][DEBUG] internal query short-circuited (khatru internal call) filter=%+v", filter)
-		}
-		ch := make(chan *nostr.Event)
-		close(ch)
-		return ch, nil
-	}
-
-	debugMsg := ""
-	if ctx.Value(1) == nil {
-		// fist case is looking for deletion requests of regular events
-		if isKind5ForRegularEvents(filter) {
-			debugMsg = fmt.Sprintf("[relaystore][DEBUG] internal query short-circuited (adding.go kind=5 #e, no ctx[1]) filter=%+v", filter)
-		} else
-		// now checks for deletion requests of replaceable events
-		if isKind5ForReplaceableEvents(filter) {
-			debugMsg = fmt.Sprintf("[relaystore][DEBUG] kind 5 deletion request detected, caching: %+v", filter)
-			r.handleAddressableEventsCaching(filter)
-		} else
-		// now check for cached blocked events
-		if r.isBlockedreplaceableEvent(filter) {
-			debugMsg = fmt.Sprintf("[relaystore][DEBUG] request blocked from cache: %+v", filter)
-		}
-		if debugMsg == "" {
-			log.Printf("=======================================================================")
-			log.Printf("[relaystore][WARN] Possible internal request not blocked: %+v", filter)
-			log.Printf("=======================================================================")
-		}
-	}
-
-	// if debug message is set, we need to ignore, return a closed channel
-	if debugMsg != "" {
-		atomic.AddInt64(&r.queryInternal, 1)
-		if r.Verbose {
-			if debugMsg != "" {
-				log.Println(debugMsg)
-			}
 		}
 		ch := make(chan *nostr.Event)
 		close(ch)
@@ -588,27 +553,40 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 		atomic.AddInt64(&r.consecutiveQueryFailures, 1)
 	}
 
-	evch := r.pool.FetchMany(ctx, r.queryUrls, filter)
+	// 3 seconds or cancel
+	timeoutCtx, cancel := context.WithTimeout(ctx, time.Second*3)
+	evch := r.pool.FetchMany(timeoutCtx, r.queryUrls, filter)
 	out := make(chan *nostr.Event)
 
 	go func() {
 		// Complete timing measurement for the complete query operation
+		defer cancel()
 		defer func() {
 			duration := time.Since(startTime)
 			atomic.AddInt64(&r.totalQueryDurationNs, duration.Nanoseconds())
 			atomic.AddInt64(&r.queryCount, 1)
 		}()
-
 		defer close(out)
-		for ie := range evch {
-			// ie is a nostr.RelayEvent containing the Event pointer
-			if ie.Event != nil {
-				// count returned events
-				atomic.AddInt64(&r.queryEventsReturned, 1)
-				select {
-				case out <- ie.Event:
-				case <-ctx.Done():
+
+		for {
+			select {
+			case <-timeoutCtx.Done():
+				log.Printf("[relaystore][WARN] query timed out after 3 seconds")
+				return
+			case ie, ok := <-evch:
+				if !ok {
+					log.Printf("[relaystore][WARN] query channel closed")
 					return
+				}
+				if ie.Event != nil {
+					atomic.AddInt64(&r.queryEventsReturned, 1)
+					select {
+					case out <- ie.Event:
+						// Event sent successfully
+					case <-timeoutCtx.Done():
+						log.Printf("[relaystore][WARN] query timed out after 3 seconds")
+						return
+					}
 				}
 			}
 		}
