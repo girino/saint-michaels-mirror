@@ -451,7 +451,7 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 	logging.DebugMethod("relaystore", "QueryEvents", "QueryEvents called (khatru_internal_call=%v) filter=%+v", khatru.IsInternalCall(ctx), filter)
 
 	// before subscribing, try ensuring relays to detect quick failures and count them
-	queryFailures := 0
+	querySuccesses := 0
 	for _, q := range r.queryUrls {
 		if q == "" {
 			continue
@@ -459,8 +459,9 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 		if _, err := r.pool.EnsureRelay(q); err != nil {
 			// count query relay failure
 			atomic.AddInt64(&r.queryFailures, 1)
-			queryFailures++
 			logging.DebugMethod("relaystore", "QueryEvents", "failed to ensure query relay %s: %v", q, err)
+		} else {
+			querySuccesses++
 		}
 	}
 
@@ -468,12 +469,9 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 	// Only consider it a failure if more than 3/4 of relays are offline
 	// If number of relays < 3, then at least 1 relay must be online
 	totalRelays := len(r.queryUrls)
-	threshold := (totalRelays * 3) / 4
-	if totalRelays < 3 {
-		threshold = totalRelays - 1 // At least 1 relay must be online
-	}
+	threshold := max(totalRelays/4, 1)
 
-	if queryFailures <= threshold {
+	if querySuccesses >= threshold {
 		// Success: reset consecutive failure counter
 		atomic.StoreInt64(&r.consecutiveQueryFailures, 0)
 	} else {
@@ -698,7 +696,7 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 	}
 
 	// before counting, try ensuring relays to detect quick failures and count them
-	countFailures := 0
+	countSuccesses := 0
 	for _, q := range r.countableQueryUrls {
 		if q == "" {
 			continue
@@ -706,8 +704,9 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 		if _, err := r.pool.EnsureRelay(q); err != nil {
 			// count query relay failure
 			atomic.AddInt64(&r.countFailures, 1)
-			countFailures++
 			logging.DebugMethod("relaystore", "CountEvents", "failed to ensure query relay %s: %v", q, err)
+		} else {
+			countSuccesses++
 		}
 	}
 
@@ -715,12 +714,9 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 	// Only consider it a failure if more than 3/4 of relays are offline
 	// If number of relays < 3, then at least 1 relay must be online
 	totalRelays := len(r.countableQueryUrls)
-	threshold := (totalRelays * 3) / 4
-	if totalRelays < 3 {
-		threshold = totalRelays - 1 // At least 1 relay must be online
-	}
+	threshold := max(totalRelays/4, 1)
 
-	if countFailures <= threshold {
+	if countSuccesses >= threshold {
 		// Success: reset consecutive failure counter
 		atomic.StoreInt64(&r.consecutiveQueryFailures, 0)
 	} else {
