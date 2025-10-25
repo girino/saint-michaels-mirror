@@ -466,9 +466,9 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 	}
 
 	// Track consecutive query failures for health checking
-	// Require at least 3/4 of relays to be online (rounded up)
+	// Require at least 1/4 of relays to be online (rounded up)
 	totalRelays := len(r.queryUrls)
-	threshold := (totalRelays*3 + 3) / 4 // 3/4 rounded up
+	threshold := (totalRelays + 3) / 4 // 1/4 rounded up
 
 	if querySuccesses >= threshold {
 		// Success: reset consecutive failure counter
@@ -710,9 +710,9 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 	}
 
 	// Track consecutive count failures for health checking
-	// Require at least 3/4 of relays to be online (rounded up)
+	// Require at least 1/4 of relays to be online (rounded up)
 	totalRelays := len(r.countableQueryUrls)
-	threshold := (totalRelays*3 + 3) / 4 // 3/4 rounded up
+	threshold := (totalRelays + 3) / 4 // 1/4 rounded up
 
 	if countSuccesses >= threshold {
 		// Success: reset consecutive failure counter
