@@ -32,6 +32,9 @@ const (
 	HealthRed    = "RED"
 )
 
+// Query timeout duration for both QueryEvents and CountEvents
+const QueryTimeoutDuration = 5 * time.Second
+
 // PrefixedError represents an error with a machine-readable prefix from NIP-01
 type PrefixedError struct {
 	Prefix   string
@@ -481,8 +484,8 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 	// Start timing measurement for the complete query operation
 	startTime := time.Now()
 
-	// 3 seconds or cancel - timeout starts AFTER semaphore acquisition
-	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, time.Second*3)
+	// QueryTimeoutDuration or cancel - timeout starts AFTER semaphore acquisition
+	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, QueryTimeoutDuration)
 	evch := r.pool.FetchMany(timeoutCtx, r.queryUrls, filter)
 	out := make(chan *nostr.Event)
 
@@ -504,7 +507,7 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 		for {
 			select {
 			case <-timeoutCtx.Done():
-				logging.Warn("query timed out after 3 seconds")
+				logging.Warn("query timed out after %v", QueryTimeoutDuration)
 				return
 			case ie, ok := <-evch:
 				if !ok {
@@ -520,7 +523,7 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 						return
 					}
 				case <-timeoutCtx.Done():
-					logging.Warn("query timed out after 3 seconds")
+					logging.Warn("query timed out after %v", QueryTimeoutDuration)
 					return
 				}
 			}
@@ -723,7 +726,9 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 	}
 
 	// use CountMany which aggregates counts across relays (NIP-45 HyperLogLog)
-	cnt := r.pool.CountMany(ctx, r.countableQueryUrls, filter, nil)
+	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, QueryTimeoutDuration)
+	defer timeoutCancel()
+	cnt := r.pool.CountMany(timeoutCtx, r.countableQueryUrls, filter, nil)
 	if cnt > 0 {
 		atomic.AddInt64(&r.countEventsReturned, int64(cnt))
 	}
