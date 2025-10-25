@@ -8,7 +8,6 @@
 package main
 
 import (
-	"context"
 	"encoding/hex"
 	"encoding/json"
 	"html/template"
@@ -20,7 +19,6 @@ import (
 	"time"
 
 	"github.com/fiatjaf/khatru"
-	"github.com/fiatjaf/khatru/policies"
 	"github.com/girino/saint-michaels-mirror/logging"
 	"github.com/girino/saint-michaels-mirror/mirror"
 	"github.com/girino/saint-michaels-mirror/relaystore"
@@ -194,30 +192,6 @@ func main() {
 			}
 		}
 	}
-
-	// Apply custom connection and filter policies for upstream relay protection
-	r.RejectFilter = append(r.RejectFilter,
-		// Restrictive filter rate limiting to prevent upstream overload
-		func(ctx context.Context, filter nostr.Filter) (reject bool, msg string) {
-			reject, msg = policies.FilterIPRateLimiter(5, time.Minute, 20)(ctx, filter)
-			if reject {
-				logging.Warn("filter IP rate limiter: %v, %s, from: %s", reject, msg, khatru.GetIP(ctx))
-			}
-			return reject, msg
-		},
-	)
-
-	// Strict connection rate limiting to prevent bot abuse
-	r.RejectConnection = append(r.RejectConnection,
-		// Strict connection limiting to prevent bot abuse
-		func(req *http.Request) (reject bool) {
-			reject = policies.ConnectionRateLimiter(1, time.Minute*2, 5)(req)
-			if reject {
-				logging.Warn("connection rate limiter: %v, from: %s", reject, khatru.GetIPFromRequest(req))
-			}
-			return reject
-		},
-	)
 
 	// hook store functions into relay
 	r.StoreEvent = append(r.StoreEvent, rs.SaveEvent)
