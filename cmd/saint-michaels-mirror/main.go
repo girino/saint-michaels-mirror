@@ -196,7 +196,7 @@ func main() {
 	}
 
 	// Apply custom connection and filter policies for upstream relay protection
-	filterIpRateLimiter := policies.FilterIPRateLimiter(5, time.Minute, 20)
+	filterIpRateLimiter := policies.FilterIPRateLimiter(20, time.Minute, 100)
 	r.RejectFilter = append(r.RejectFilter,
 		// Restrictive filter rate limiting to prevent upstream overload
 		func(ctx context.Context, filter nostr.Filter) (reject bool, msg string) {
@@ -209,7 +209,7 @@ func main() {
 	)
 
 	// Strict connection rate limiting to prevent bot abuse
-	connectionRateLimiter := policies.ConnectionRateLimiter(1, time.Minute*2, 5)
+	connectionRateLimiter := policies.ConnectionRateLimiter(1, time.Minute*5, 100)
 	r.RejectConnection = append(r.RejectConnection,
 		// Strict connection limiting to prevent bot abuse
 		func(req *http.Request) (reject bool) {
