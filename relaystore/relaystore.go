@@ -450,6 +450,29 @@ func (r *RelayStore) QueryEvents(ctx context.Context, filter nostr.Filter) (chan
 	// use FetchMany which ends when all relays return EOSE
 	logging.DebugMethod("relaystore", "QueryEvents", "QueryEvents called (khatru_internal_call=%v) filter=%+v", khatru.IsInternalCall(ctx), filter)
 
+	// before subscribing, try ensuring relays to detect quick failures and count them
+	queryFailures := 0
+	for _, q := range r.queryUrls {
+		if q == "" {
+			continue
+		}
+		if _, err := r.pool.EnsureRelay(q); err != nil {
+			// count query relay failure
+			atomic.AddInt64(&r.queryFailures, 1)
+			queryFailures++
+			logging.DebugMethod("relaystore", "QueryEvents", "failed to ensure query relay %s: %v", q, err)
+		}
+	}
+
+	// Track consecutive query failures for health checking
+	if queryFailures == 0 {
+		// Success: reset consecutive failure counter
+		atomic.StoreInt64(&r.consecutiveQueryFailures, 0)
+	} else {
+		// Failure: increment consecutive failure counter
+		atomic.AddInt64(&r.consecutiveQueryFailures, 1)
+	}
+
 	// Start timing measurement for the complete query operation
 	startTime := time.Now()
 
@@ -664,6 +687,29 @@ func (r *RelayStore) CountEvents(ctx context.Context, filter nostr.Filter) (int6
 	if len(r.countableQueryUrls) == 0 {
 		logging.DebugMethod("relaystore", "CountEvents", "no NIP-45-capable query remotes available; returning 0")
 		return 0, nil
+	}
+
+	// before counting, try ensuring relays to detect quick failures and count them
+	countFailures := 0
+	for _, q := range r.countableQueryUrls {
+		if q == "" {
+			continue
+		}
+		if _, err := r.pool.EnsureRelay(q); err != nil {
+			// count query relay failure
+			atomic.AddInt64(&r.countFailures, 1)
+			countFailures++
+			logging.DebugMethod("relaystore", "CountEvents", "failed to ensure query relay %s: %v", q, err)
+		}
+	}
+
+	// Track consecutive count failures for health checking
+	if countFailures == 0 {
+		// Success: reset consecutive failure counter
+		atomic.StoreInt64(&r.consecutiveQueryFailures, 0)
+	} else {
+		// Failure: increment consecutive failure counter
+		atomic.AddInt64(&r.consecutiveQueryFailures, 1)
 	}
 
 	// use CountMany which aggregates counts across relays (NIP-45 HyperLogLog)
