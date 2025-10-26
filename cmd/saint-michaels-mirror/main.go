@@ -76,6 +76,56 @@ func (p *mirrorStatsProvider) GetStats() jsonlib.JsonEntity {
 	return obj
 }
 
+// appStatsProvider provides runtime stats for the application
+type appStatsProvider struct {
+	startTime time.Time
+	version   string
+}
+
+func (p *appStatsProvider) GetStatsName() string {
+	return "app"
+}
+
+func (p *appStatsProvider) GetStats() jsonlib.JsonEntity {
+	// Get runtime stats
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	// Get goroutine health state
+	goroutineCount := runtime.NumGoroutine()
+	goroutineHealthState := getGoroutineHealthState(goroutineCount)
+
+	// Build app stats object
+	appObj := jsonlib.NewJsonObject()
+	appObj.Set("version", jsonlib.NewJsonValue(p.version))
+	appObj.Set("uptime", jsonlib.NewJsonValue(time.Since(p.startTime).Seconds()))
+
+	goroutineObj := jsonlib.NewJsonObject()
+	goroutineObj.Set("count", jsonlib.NewJsonValue(goroutineCount))
+	goroutineObj.Set("health_state", jsonlib.NewJsonValue(goroutineHealthState))
+	appObj.Set("goroutines", goroutineObj)
+
+	memoryObj := jsonlib.NewJsonObject()
+	memoryObj.Set("alloc_bytes", jsonlib.NewJsonValue(m.Alloc))
+	memoryObj.Set("total_alloc_bytes", jsonlib.NewJsonValue(m.TotalAlloc))
+	memoryObj.Set("sys_bytes", jsonlib.NewJsonValue(m.Sys))
+	memoryObj.Set("heap_alloc_bytes", jsonlib.NewJsonValue(m.HeapAlloc))
+	memoryObj.Set("heap_sys_bytes", jsonlib.NewJsonValue(m.HeapSys))
+	memoryObj.Set("heap_idle_bytes", jsonlib.NewJsonValue(m.HeapIdle))
+	memoryObj.Set("heap_inuse_bytes", jsonlib.NewJsonValue(m.HeapInuse))
+	memoryObj.Set("gc_cycles", jsonlib.NewJsonValue(m.NumGC))
+	memoryObj.Set("gc_pause_ns", jsonlib.NewJsonValue(m.PauseTotalNs))
+	appObj.Set("memory", memoryObj)
+
+	gcObj := jsonlib.NewJsonObject()
+	gcObj.Set("cycles", jsonlib.NewJsonValue(m.NumGC))
+	gcObj.Set("pause_ns", jsonlib.NewJsonValue(m.PauseTotalNs))
+	gcObj.Set("next_gc_ns", jsonlib.NewJsonValue(m.NextGC))
+	appObj.Set("gc", gcObj)
+
+	return appObj
+}
+
 func main() {
 	// Track start time for uptime calculation
 	startTime := time.Now()
@@ -261,51 +311,16 @@ func main() {
 	if mm != nil {
 		stats.GetCollector().RegisterProvider(&mirrorStatsProvider{manager: mm})
 	}
+	stats.GetCollector().RegisterProvider(&appStatsProvider{
+		startTime: startTime,
+		version:   Version,
+	})
 
 	// expose stats endpoint using the relay's router
 	mux := r.Router()
 	mux.HandleFunc("/api/v1/stats", func(w http.ResponseWriter, req *http.Request) {
 		// Get stats from global collector
 		allStats := stats.GetCollector().GetAllStats()
-
-		// Get runtime stats
-		var m runtime.MemStats
-		runtime.ReadMemStats(&m)
-
-		// Get goroutine health state
-		goroutineCount := runtime.NumGoroutine()
-		goroutineHealthState := getGoroutineHealthState(goroutineCount)
-
-		// Build app stats object
-		appObj := jsonlib.NewJsonObject()
-		appObj.Set("version", jsonlib.NewJsonValue(Version))
-		appObj.Set("uptime", jsonlib.NewJsonValue(time.Since(startTime).Seconds()))
-
-		goroutineObj := jsonlib.NewJsonObject()
-		goroutineObj.Set("count", jsonlib.NewJsonValue(goroutineCount))
-		goroutineObj.Set("health_state", jsonlib.NewJsonValue(goroutineHealthState))
-		appObj.Set("goroutines", goroutineObj)
-
-		memoryObj := jsonlib.NewJsonObject()
-		memoryObj.Set("alloc_bytes", jsonlib.NewJsonValue(m.Alloc))
-		memoryObj.Set("total_alloc_bytes", jsonlib.NewJsonValue(m.TotalAlloc))
-		memoryObj.Set("sys_bytes", jsonlib.NewJsonValue(m.Sys))
-		memoryObj.Set("heap_alloc_bytes", jsonlib.NewJsonValue(m.HeapAlloc))
-		memoryObj.Set("heap_sys_bytes", jsonlib.NewJsonValue(m.HeapSys))
-		memoryObj.Set("heap_idle_bytes", jsonlib.NewJsonValue(m.HeapIdle))
-		memoryObj.Set("heap_inuse_bytes", jsonlib.NewJsonValue(m.HeapInuse))
-		memoryObj.Set("gc_cycles", jsonlib.NewJsonValue(m.NumGC))
-		memoryObj.Set("gc_pause_ns", jsonlib.NewJsonValue(m.PauseTotalNs))
-		appObj.Set("memory", memoryObj)
-
-		gcObj := jsonlib.NewJsonObject()
-		gcObj.Set("cycles", jsonlib.NewJsonValue(m.NumGC))
-		gcObj.Set("pause_ns", jsonlib.NewJsonValue(m.PauseTotalNs))
-		gcObj.Set("next_gc_ns", jsonlib.NewJsonValue(m.NextGC))
-		appObj.Set("gc", gcObj)
-
-		// Add app stats to all stats
-		allStats.Set("app", appObj)
 
 		// Marshal to JSON
 		jsonData, err := jsonlib.MarshalIndent(allStats, "", "  ")
