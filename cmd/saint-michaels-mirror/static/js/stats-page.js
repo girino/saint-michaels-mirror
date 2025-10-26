@@ -62,7 +62,7 @@ function populateStats(data) {
   // Application stats
   document.getElementById('app-version').textContent = data.app?.version || '-';
   document.getElementById('app-uptime').textContent = `${Math.floor((data.app?.uptime || 0) / 60)}m ${Math.floor((data.app?.uptime || 0) % 60)}s`;
-  document.getElementById('app-goroutines').textContent = data.app?.goroutines || '-';
+  document.getElementById('app-goroutines').textContent = data.app?.goroutines?.count || '-';
   document.getElementById('app-memory-used').textContent = formatBytes(data.app?.memory?.heap_alloc_bytes || 0);
   document.getElementById('app-memory-total').textContent = formatBytes(data.app?.memory?.sys_bytes || 0);
   document.getElementById('app-gc-cycles').textContent = data.app?.gc?.cycles || '-';
@@ -108,7 +108,7 @@ function populateStats(data) {
   mirrorHealthEl.className = `health-indicator ${getHealthClass(mirrorHealthState)}`;
 
   const goroutineHealthEl = document.getElementById('health-goroutines');
-  const goroutineHealthState = data.app?.goroutine_health_state || 'UNKNOWN';
+  const goroutineHealthState = data.app?.goroutines?.health_state || 'UNKNOWN';
   goroutineHealthEl.textContent = goroutineHealthState;
   goroutineHealthEl.className = `health-indicator ${getHealthClass(goroutineHealthState)}`;
 
