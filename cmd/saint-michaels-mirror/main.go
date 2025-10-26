@@ -10,7 +10,6 @@ package main
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"html/template"
 	"net"
 	"net/http"
@@ -52,47 +51,6 @@ func getGoroutineHealthState(goroutineCount int) string {
 		return HealthYellow
 	}
 	return HealthGreen
-}
-
-// relaystoreStatsProvider wraps relaystore for StatsProvider interface
-type relaystoreStatsProvider struct {
-	store *relaystore.RelayStore
-}
-
-func (p *relaystoreStatsProvider) GetStatsName() string {
-	return "relay"
-}
-
-func (p *relaystoreStatsProvider) GetStats() jsonlib.JsonEntity {
-	s := p.store.Stats()
-	obj := jsonlib.NewJsonObject()
-	obj.Set("publish_attempts", jsonlib.NewJsonValue(s.PublishAttempts))
-	obj.Set("publish_successes", jsonlib.NewJsonValue(s.PublishSuccesses))
-	obj.Set("publish_failures", jsonlib.NewJsonValue(s.PublishFailures))
-	obj.Set("consecutive_publish_failures", jsonlib.NewJsonValue(s.ConsecutivePublishFailures))
-	obj.Set("publish_health_state", jsonlib.NewJsonValue(s.PublishHealthState))
-	obj.Set("query_requests", jsonlib.NewJsonValue(s.QueryRequests))
-	obj.Set("query_internal_requests", jsonlib.NewJsonValue(s.QueryInternal))
-	obj.Set("query_external_requests", jsonlib.NewJsonValue(s.QueryExternal))
-	obj.Set("query_events_returned", jsonlib.NewJsonValue(s.QueryEventsReturned))
-	obj.Set("query_failures", jsonlib.NewJsonValue(s.QueryFailures))
-	obj.Set("consecutive_query_failures", jsonlib.NewJsonValue(s.ConsecutiveQueryFailures))
-	obj.Set("query_health_state", jsonlib.NewJsonValue(s.QueryHealthState))
-	obj.Set("count_requests", jsonlib.NewJsonValue(s.CountRequests))
-	obj.Set("count_internal_requests", jsonlib.NewJsonValue(s.CountInternal))
-	obj.Set("count_external_requests", jsonlib.NewJsonValue(s.CountExternal))
-	obj.Set("count_events_returned", jsonlib.NewJsonValue(s.CountEventsReturned))
-	obj.Set("count_failures", jsonlib.NewJsonValue(s.CountFailures))
-	obj.Set("main_health_state", jsonlib.NewJsonValue(s.MainHealthState))
-	obj.Set("health_status", jsonlib.NewJsonValue(s.HealthStatus))
-	obj.Set("is_healthy", jsonlib.NewJsonValue(s.IsHealthy))
-	obj.Set("average_publish_duration_ms", jsonlib.NewJsonValue(s.AveragePublishDurationMs))
-	obj.Set("average_query_duration_ms", jsonlib.NewJsonValue(s.AverageQueryDurationMs))
-	obj.Set("average_count_duration_ms", jsonlib.NewJsonValue(s.AverageCountDurationMs))
-	obj.Set("total_publish_duration_ms", jsonlib.NewJsonValue(s.TotalPublishDurationMs))
-	obj.Set("total_query_duration_ms", jsonlib.NewJsonValue(s.TotalQueryDurationMs))
-	obj.Set("total_count_duration_ms", jsonlib.NewJsonValue(s.TotalCountDurationMs))
-	return obj
 }
 
 // mirrorStatsProvider wraps mirror for StatsProvider interface
@@ -300,7 +258,9 @@ func main() {
 
 	// register stats providers with global collector
 	stats.GetCollector().RegisterProvider(rs)
-	stats.GetCollector().RegisterProvider(&mirrorStatsProvider{manager: mm})
+	if mm != nil {
+		stats.GetCollector().RegisterProvider(&mirrorStatsProvider{manager: mm})
+	}
 
 	// expose stats endpoint using the relay's router
 	mux := r.Router()
@@ -362,28 +322,76 @@ func main() {
 	mux.HandleFunc("/api/v1/health", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
-		// Get relaystore health status
-		relayStats := rs.Stats()
+		// Get stats from global collector
+		allStats := stats.GetCollector().GetAllStats()
+		relayStatsEntity, _ := allStats.Get("relay")
+		mirrorStatsEntity, _ := allStats.Get("mirror")
+		relayStatsObj, _ := relayStatsEntity.(*jsonlib.JsonObject)
+		mirrorStatsObj, _ := mirrorStatsEntity.(*jsonlib.JsonObject)
 
-		// Get mirror health status
-		mirrorStats := mm.Stats()
+		// Extract health states
+		var mainHealthState string
+		var publishHealthState string
+		var queryHealthState string
+		var mirrorHealthState string
+		var consecutivePublishFailures int64
+		var consecutiveQueryFailures int64
+		var consecutiveMirrorFailures int64
 
-		// Determine overall health status and HTTP status code
-		var httpStatus int
-		var status string
-
-		// Use the worst health state between relay and mirror
-		mainHealthState := relayStats.MainHealthState
-		if mirrorStats.MirrorHealthState == "RED" || (mirrorStats.MirrorHealthState == "YELLOW" && mainHealthState == "GREEN") {
-			mainHealthState = mirrorStats.MirrorHealthState
+		if relayStatsObj != nil {
+			if mainHealthStateVal, ok := relayStatsObj.Get("main_health_state"); ok {
+				if val, ok := mainHealthStateVal.(*jsonlib.JsonValue); ok {
+					mainHealthState, _ = val.GetString()
+				}
+			}
+			if state, ok := relayStatsObj.Get("publish_health_state"); ok {
+				if val, ok := state.(*jsonlib.JsonValue); ok {
+					publishHealthState, _ = val.GetString()
+				}
+			}
+			if state, ok := relayStatsObj.Get("query_health_state"); ok {
+				if val, ok := state.(*jsonlib.JsonValue); ok {
+					queryHealthState, _ = val.GetString()
+				}
+			}
+			if failures, ok := relayStatsObj.Get("consecutive_publish_failures"); ok {
+				if val, ok := failures.(*jsonlib.JsonValue); ok {
+					consecutivePublishFailures, _ = val.GetInt()
+				}
+			}
+			if failures, ok := relayStatsObj.Get("consecutive_query_failures"); ok {
+				if val, ok := failures.(*jsonlib.JsonValue); ok {
+					consecutiveQueryFailures, _ = val.GetInt()
+				}
+			}
 		}
 
+		if mirrorStatsObj != nil {
+			if state, ok := mirrorStatsObj.Get("mirror_health_state"); ok {
+				if val, ok := state.(*jsonlib.JsonValue); ok {
+					mirrorHealthState, _ = val.GetString()
+				}
+			}
+			if failures, ok := mirrorStatsObj.Get("consecutive_mirror_failures"); ok {
+				if val, ok := failures.(*jsonlib.JsonValue); ok {
+					consecutiveMirrorFailures, _ = val.GetInt()
+				}
+			}
+			// Use mirror health state if it's worse
+			if mirrorHealthState == "RED" || (mirrorHealthState == "YELLOW" && mainHealthState == "GREEN") {
+				mainHealthState = mirrorHealthState
+			}
+		}
+
+		// Determine HTTP status
+		var httpStatus int
+		var status string
 		switch mainHealthState {
 		case "GREEN":
 			httpStatus = http.StatusOK
 			status = "healthy"
 		case "YELLOW":
-			httpStatus = http.StatusOK // Still OK but degraded
+			httpStatus = http.StatusOK
 			status = "degraded"
 		case "RED":
 			httpStatus = http.StatusServiceUnavailable
@@ -393,24 +401,28 @@ func main() {
 			status = "unknown"
 		}
 
-		health := map[string]interface{}{
-			"status":                       status,
-			"service":                      r.Info.Name,
-			"version":                      Version,
-			"main_health_state":            mainHealthState,
-			"publish_health_state":         relayStats.PublishHealthState,
-			"query_health_state":           relayStats.QueryHealthState,
-			"mirror_health_state":          mirrorStats.MirrorHealthState,
-			"consecutive_publish_failures": relayStats.ConsecutivePublishFailures,
-			"consecutive_query_failures":   relayStats.ConsecutiveQueryFailures,
-			"consecutive_mirror_failures":  mirrorStats.ConsecutiveMirrorFailures,
-		}
+		// Build health response as JsonObject
+		health := jsonlib.NewJsonObject()
+		health.Set("status", jsonlib.NewJsonValue(status))
+		health.Set("service", jsonlib.NewJsonValue(r.Info.Name))
+		health.Set("version", jsonlib.NewJsonValue(Version))
+		health.Set("main_health_state", jsonlib.NewJsonValue(mainHealthState))
+		health.Set("publish_health_state", jsonlib.NewJsonValue(publishHealthState))
+		health.Set("query_health_state", jsonlib.NewJsonValue(queryHealthState))
+		health.Set("mirror_health_state", jsonlib.NewJsonValue(mirrorHealthState))
+		health.Set("consecutive_publish_failures", jsonlib.NewJsonValue(consecutivePublishFailures))
+		health.Set("consecutive_query_failures", jsonlib.NewJsonValue(consecutiveQueryFailures))
+		health.Set("consecutive_mirror_failures", jsonlib.NewJsonValue(consecutiveMirrorFailures))
 
-		w.WriteHeader(httpStatus)
-		if err := json.NewEncoder(w).Encode(health); err != nil {
+		// Marshal to JSON
+		jsonData, err := jsonlib.MarshalIndent(health, "", "  ")
+		if err != nil {
 			http.Error(w, "failed to encode health status", http.StatusInternalServerError)
 			return
 		}
+
+		w.WriteHeader(httpStatus)
+		w.Write(jsonData)
 	})
 
 	// Define view model struct for templates
