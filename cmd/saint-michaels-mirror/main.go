@@ -299,7 +299,7 @@ func main() {
 	defer mm.StopMirroring()
 
 	// register stats providers with global collector
-	stats.GetCollector().RegisterProvider(&relaystoreStatsProvider{store: rs})
+	stats.GetCollector().RegisterProvider(rs)
 	stats.GetCollector().RegisterProvider(&mirrorStatsProvider{manager: mm})
 
 	// expose stats endpoint using the relay's router
