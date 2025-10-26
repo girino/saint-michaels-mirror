@@ -21,9 +21,9 @@ import (
 
 	"github.com/fiatjaf/khatru"
 	"github.com/fiatjaf/khatru/policies"
+	"github.com/girino/nostr-lib/eventstore/relaystore"
 	"github.com/girino/nostr-lib/logging"
 	"github.com/girino/nostr-lib/mirror"
-	"github.com/girino/nostr-lib/eventstore/relaystore"
 	"github.com/nbd-wtf/go-nostr"
 	nip11 "github.com/nbd-wtf/go-nostr/nip11"
 	nip19 "github.com/nbd-wtf/go-nostr/nip19"
