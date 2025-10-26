@@ -53,29 +53,6 @@ func getGoroutineHealthState(goroutineCount int) string {
 	return HealthGreen
 }
 
-// mirrorStatsProvider wraps mirror for StatsProvider interface
-type mirrorStatsProvider struct {
-	manager *mirror.MirrorManager
-}
-
-func (p *mirrorStatsProvider) GetStatsName() string {
-	return "mirror"
-}
-
-func (p *mirrorStatsProvider) GetStats() jsonlib.JsonEntity {
-	s := p.manager.Stats()
-	obj := jsonlib.NewJsonObject()
-	obj.Set("mirrored_events", jsonlib.NewJsonValue(s.MirroredEvents))
-	obj.Set("mirror_attempts", jsonlib.NewJsonValue(s.MirrorAttempts))
-	obj.Set("mirror_successes", jsonlib.NewJsonValue(s.MirrorSuccesses))
-	obj.Set("mirror_failures", jsonlib.NewJsonValue(s.MirrorFailures))
-	obj.Set("consecutive_mirror_failures", jsonlib.NewJsonValue(s.ConsecutiveMirrorFailures))
-	obj.Set("mirror_health_state", jsonlib.NewJsonValue(s.MirrorHealthState))
-	obj.Set("live_relays", jsonlib.NewJsonValue(s.LiveRelays))
-	obj.Set("dead_relays", jsonlib.NewJsonValue(s.DeadRelays))
-	return obj
-}
-
 // appStatsProvider provides runtime stats for the application
 type appStatsProvider struct {
 	startTime time.Time
@@ -309,7 +286,7 @@ func main() {
 	// register stats providers with global collector
 	stats.GetCollector().RegisterProvider(rs)
 	if mm != nil {
-		stats.GetCollector().RegisterProvider(&mirrorStatsProvider{manager: mm})
+		stats.GetCollector().RegisterProvider(mm)
 	}
 	stats.GetCollector().RegisterProvider(&appStatsProvider{
 		startTime: startTime,
