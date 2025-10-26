@@ -22,8 +22,10 @@ import (
 	"github.com/fiatjaf/khatru"
 	"github.com/fiatjaf/khatru/policies"
 	"github.com/girino/nostr-lib/eventstore/relaystore"
+	jsonlib "github.com/girino/nostr-lib/json"
 	"github.com/girino/nostr-lib/logging"
 	"github.com/girino/nostr-lib/mirror"
+	"github.com/girino/nostr-lib/stats"
 	"github.com/nbd-wtf/go-nostr"
 	nip11 "github.com/nbd-wtf/go-nostr/nip11"
 	nip19 "github.com/nbd-wtf/go-nostr/nip19"
@@ -50,6 +52,70 @@ func getGoroutineHealthState(goroutineCount int) string {
 		return HealthYellow
 	}
 	return HealthGreen
+}
+
+// relaystoreStatsProvider wraps relaystore for StatsProvider interface
+type relaystoreStatsProvider struct {
+	store *relaystore.RelayStore
+}
+
+func (p *relaystoreStatsProvider) GetStatsName() string {
+	return "relay"
+}
+
+func (p *relaystoreStatsProvider) GetStats() jsonlib.JsonEntity {
+	s := p.store.Stats()
+	obj := jsonlib.NewJsonObject()
+	obj.Set("publish_attempts", jsonlib.NewJsonValue(s.PublishAttempts))
+	obj.Set("publish_successes", jsonlib.NewJsonValue(s.PublishSuccesses))
+	obj.Set("publish_failures", jsonlib.NewJsonValue(s.PublishFailures))
+	obj.Set("consecutive_publish_failures", jsonlib.NewJsonValue(s.ConsecutivePublishFailures))
+	obj.Set("publish_health_state", jsonlib.NewJsonValue(s.PublishHealthState))
+	obj.Set("query_requests", jsonlib.NewJsonValue(s.QueryRequests))
+	obj.Set("query_internal_requests", jsonlib.NewJsonValue(s.QueryInternal))
+	obj.Set("query_external_requests", jsonlib.NewJsonValue(s.QueryExternal))
+	obj.Set("query_events_returned", jsonlib.NewJsonValue(s.QueryEventsReturned))
+	obj.Set("query_failures", jsonlib.NewJsonValue(s.QueryFailures))
+	obj.Set("consecutive_query_failures", jsonlib.NewJsonValue(s.ConsecutiveQueryFailures))
+	obj.Set("query_health_state", jsonlib.NewJsonValue(s.QueryHealthState))
+	obj.Set("count_requests", jsonlib.NewJsonValue(s.CountRequests))
+	obj.Set("count_internal_requests", jsonlib.NewJsonValue(s.CountInternal))
+	obj.Set("count_external_requests", jsonlib.NewJsonValue(s.CountExternal))
+	obj.Set("count_events_returned", jsonlib.NewJsonValue(s.CountEventsReturned))
+	obj.Set("count_failures", jsonlib.NewJsonValue(s.CountFailures))
+	obj.Set("main_health_state", jsonlib.NewJsonValue(s.MainHealthState))
+	obj.Set("health_status", jsonlib.NewJsonValue(s.HealthStatus))
+	obj.Set("is_healthy", jsonlib.NewJsonValue(s.IsHealthy))
+	obj.Set("average_publish_duration_ms", jsonlib.NewJsonValue(s.AveragePublishDurationMs))
+	obj.Set("average_query_duration_ms", jsonlib.NewJsonValue(s.AverageQueryDurationMs))
+	obj.Set("average_count_duration_ms", jsonlib.NewJsonValue(s.AverageCountDurationMs))
+	obj.Set("total_publish_duration_ms", jsonlib.NewJsonValue(s.TotalPublishDurationMs))
+	obj.Set("total_query_duration_ms", jsonlib.NewJsonValue(s.TotalQueryDurationMs))
+	obj.Set("total_count_duration_ms", jsonlib.NewJsonValue(s.TotalCountDurationMs))
+	return obj
+}
+
+// mirrorStatsProvider wraps mirror for StatsProvider interface
+type mirrorStatsProvider struct {
+	manager *mirror.MirrorManager
+}
+
+func (p *mirrorStatsProvider) GetStatsName() string {
+	return "mirror"
+}
+
+func (p *mirrorStatsProvider) GetStats() jsonlib.JsonEntity {
+	s := p.manager.Stats()
+	obj := jsonlib.NewJsonObject()
+	obj.Set("mirrored_events", jsonlib.NewJsonValue(s.MirroredEvents))
+	obj.Set("mirror_attempts", jsonlib.NewJsonValue(s.MirrorAttempts))
+	obj.Set("mirror_successes", jsonlib.NewJsonValue(s.MirrorSuccesses))
+	obj.Set("mirror_failures", jsonlib.NewJsonValue(s.MirrorFailures))
+	obj.Set("consecutive_mirror_failures", jsonlib.NewJsonValue(s.ConsecutiveMirrorFailures))
+	obj.Set("mirror_health_state", jsonlib.NewJsonValue(s.MirrorHealthState))
+	obj.Set("live_relays", jsonlib.NewJsonValue(s.LiveRelays))
+	obj.Set("dead_relays", jsonlib.NewJsonValue(s.DeadRelays))
+	return obj
 }
 
 func main() {
@@ -232,14 +298,15 @@ func main() {
 	}
 	defer mm.StopMirroring()
 
+	// register stats providers with global collector
+	stats.GetCollector().RegisterProvider(&relaystoreStatsProvider{store: rs})
+	stats.GetCollector().RegisterProvider(&mirrorStatsProvider{manager: mm})
+
 	// expose stats endpoint using the relay's router
 	mux := r.Router()
 	mux.HandleFunc("/api/v1/stats", func(w http.ResponseWriter, req *http.Request) {
-		// Get relaystore stats
-		relayStats := rs.Stats()
-
-		// Get mirror stats
-		mirrorStats := mm.Stats()
+		// Get stats from global collector
+		allStats := stats.GetCollector().GetAllStats()
 
 		// Get runtime stats
 		var m runtime.MemStats
@@ -249,44 +316,46 @@ func main() {
 		goroutineCount := runtime.NumGoroutine()
 		goroutineHealthState := getGoroutineHealthState(goroutineCount)
 
-		// Build comprehensive stats response
-		stats := map[string]interface{}{
-			// Relay store stats
-			"relay": relayStats,
+		// Build app stats object
+		appObj := jsonlib.NewJsonObject()
+		appObj.Set("version", jsonlib.NewJsonValue(Version))
+		appObj.Set("uptime", jsonlib.NewJsonValue(time.Since(startTime).Seconds()))
 
-			// Mirror stats
-			"mirror": mirrorStats,
+		goroutineObj := jsonlib.NewJsonObject()
+		goroutineObj.Set("count", jsonlib.NewJsonValue(goroutineCount))
+		goroutineObj.Set("health_state", jsonlib.NewJsonValue(goroutineHealthState))
+		appObj.Set("goroutines", goroutineObj)
 
-			// Application runtime stats
-			"app": map[string]interface{}{
-				"version":                Version,
-				"uptime":                 time.Since(startTime).Seconds(),
-				"goroutines":             goroutineCount,
-				"goroutine_health_state": goroutineHealthState,
-				"memory": map[string]interface{}{
-					"alloc_bytes":       m.Alloc,
-					"total_alloc_bytes": m.TotalAlloc,
-					"sys_bytes":         m.Sys,
-					"heap_alloc_bytes":  m.HeapAlloc,
-					"heap_sys_bytes":    m.HeapSys,
-					"heap_idle_bytes":   m.HeapIdle,
-					"heap_inuse_bytes":  m.HeapInuse,
-					"gc_cycles":         m.NumGC,
-					"gc_pause_ns":       m.PauseTotalNs,
-				},
-				"gc": map[string]interface{}{
-					"cycles":     m.NumGC,
-					"pause_ns":   m.PauseTotalNs,
-					"next_gc_ns": m.NextGC,
-				},
-			},
-		}
+		memoryObj := jsonlib.NewJsonObject()
+		memoryObj.Set("alloc_bytes", jsonlib.NewJsonValue(m.Alloc))
+		memoryObj.Set("total_alloc_bytes", jsonlib.NewJsonValue(m.TotalAlloc))
+		memoryObj.Set("sys_bytes", jsonlib.NewJsonValue(m.Sys))
+		memoryObj.Set("heap_alloc_bytes", jsonlib.NewJsonValue(m.HeapAlloc))
+		memoryObj.Set("heap_sys_bytes", jsonlib.NewJsonValue(m.HeapSys))
+		memoryObj.Set("heap_idle_bytes", jsonlib.NewJsonValue(m.HeapIdle))
+		memoryObj.Set("heap_inuse_bytes", jsonlib.NewJsonValue(m.HeapInuse))
+		memoryObj.Set("gc_cycles", jsonlib.NewJsonValue(m.NumGC))
+		memoryObj.Set("gc_pause_ns", jsonlib.NewJsonValue(m.PauseTotalNs))
+		appObj.Set("memory", memoryObj)
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(stats); err != nil {
+		gcObj := jsonlib.NewJsonObject()
+		gcObj.Set("cycles", jsonlib.NewJsonValue(m.NumGC))
+		gcObj.Set("pause_ns", jsonlib.NewJsonValue(m.PauseTotalNs))
+		gcObj.Set("next_gc_ns", jsonlib.NewJsonValue(m.NextGC))
+		appObj.Set("gc", gcObj)
+
+		// Add app stats to all stats
+		allStats.Set("app", appObj)
+
+		// Marshal to JSON
+		jsonData, err := jsonlib.MarshalIndent(allStats, "", "  ")
+		if err != nil {
 			http.Error(w, "failed to encode stats", http.StatusInternalServerError)
 			return
 		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(jsonData)
 	})
 
 	// expose health endpoint for docker healthchecks
