@@ -30,6 +30,13 @@ type Config struct {
 	RelayPubKey      string
 	RelayIcon        string
 	RelayBanner      string
+
+	// Broadcast settings
+	BroadcastTopN            int
+	BroadcastWorkers         int
+	BroadcastCacheTTL        string
+	BroadcastSeedRelays      []string
+	BroadcastMandatoryRelays []string
 }
 
 // LoadConfig reads environment variables and flags. Flags override env values.
@@ -57,6 +64,32 @@ func LoadConfig() *Config {
 		qry = strings.Split(*queryRemotes, ",")
 	}
 
+	// Parse broadcast settings
+	broadcastTopN := 10
+	if os.Getenv("BROADCAST_TOP_N") != "" {
+		broadcastTopN = 10 // default
+	}
+
+	broadcastWorkers := 5
+	if os.Getenv("BROADCAST_WORKERS") != "" {
+		broadcastWorkers = 5 // default
+	}
+
+	broadcastCacheTTL := "1h"
+	if os.Getenv("BROADCAST_CACHE_TTL") != "" {
+		broadcastCacheTTL = os.Getenv("BROADCAST_CACHE_TTL")
+	}
+
+	broadcastSeedRelays := []string{}
+	if os.Getenv("BROADCAST_SEED_RELAYS") != "" {
+		broadcastSeedRelays = strings.Split(os.Getenv("BROADCAST_SEED_RELAYS"), ",")
+	}
+
+	broadcastMandatoryRelays := []string{}
+	if os.Getenv("BROADCAST_MANDATORY_RELAYS") != "" {
+		broadcastMandatoryRelays = strings.Split(os.Getenv("BROADCAST_MANDATORY_RELAYS"), ",")
+	}
+
 	cfg := &Config{
 		Addr:           *addr,
 		PublishRemotes: pub,
@@ -71,6 +104,12 @@ func LoadConfig() *Config {
 		RelayPubKey:      os.Getenv("RELAY_PUBKEY"),
 		RelayIcon:        os.Getenv("RELAY_ICON"),
 		RelayBanner:      os.Getenv("RELAY_BANNER"),
+
+		BroadcastTopN:            broadcastTopN,
+		BroadcastWorkers:         broadcastWorkers,
+		BroadcastCacheTTL:        broadcastCacheTTL,
+		BroadcastSeedRelays:      broadcastSeedRelays,
+		BroadcastMandatoryRelays: broadcastMandatoryRelays,
 	}
 
 	return cfg

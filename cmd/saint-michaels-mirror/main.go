@@ -20,7 +20,9 @@ import (
 
 	"github.com/fiatjaf/khatru"
 	"github.com/fiatjaf/khatru/policies"
+	"github.com/girino/nostr-lib/broadcast"
 	"github.com/girino/nostr-lib/eventstore/relaystore"
+	"github.com/girino/saint-michaels-mirror/eventstore/broadcaststore"
 	jsonlib "github.com/girino/nostr-lib/json"
 	"github.com/girino/nostr-lib/logging"
 	"github.com/girino/nostr-lib/mirror"
@@ -272,8 +274,51 @@ func main() {
 		},
 	)
 
+	// initialize broadcaststore if seed relays are configured
+	var bs *broadcaststore.BroadcastStore
+	if len(cfg.BroadcastSeedRelays) > 0 {
+		// Parse cache TTL
+		cacheTTL, err := time.ParseDuration(cfg.BroadcastCacheTTL)
+		if err != nil {
+			logging.Warn("failed to parse BROADCAST_CACHE_TTL, using default 1h: %v", err)
+			cacheTTL = time.Hour
+		}
+
+		// Create broadcast config
+		broadcastConfig := &broadcast.Config{
+			TopNRelays:       cfg.BroadcastTopN,
+			SuccessRateDecay: 0.9,
+			MandatoryRelays:  cfg.BroadcastMandatoryRelays,
+			WorkerCount:      cfg.BroadcastWorkers,
+			CacheTTL:         5 * time.Minute,
+			InitialTimeout:   7 * time.Second,
+		}
+
+		// Create broadcaststore
+		bs = broadcaststore.NewBroadcastStore(broadcastConfig, cacheTTL, 10)
+		if err := bs.Init(); err != nil {
+			logging.Fatal("initializing broadcaststore: %v", err)
+		}
+		defer bs.Close()
+
+		// Perform discovery from seed relays
+		ctx := context.Background()
+		bs.GetBroadcastSystem().DiscoverFromSeeds(ctx, cfg.BroadcastSeedRelays)
+		bs.GetBroadcastSystem().MarkInitialized()
+
+		logging.Info("broadcaststore initialized with %d seed relays", len(cfg.BroadcastSeedRelays))
+
+		// Register broadcaststore stats provider
+		stats.GetCollector().RegisterProvider(bs)
+	}
+
 	// hook store functions into relay
-	r.StoreEvent = append(r.StoreEvent, rs.SaveEvent)
+	// Use broadcaststore for SaveEvent if available, otherwise use relaystore
+	if bs != nil {
+		r.StoreEvent = append(r.StoreEvent, bs.SaveEvent)
+	} else {
+		r.StoreEvent = append(r.StoreEvent, rs.SaveEvent)
+	}
 	r.QueryEvents = append(r.QueryEvents, rs.QueryEvents)
 	r.CountEvents = append(r.CountEvents, rs.CountEvents)
 
