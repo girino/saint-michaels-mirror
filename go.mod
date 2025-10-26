@@ -1,9 +1,10 @@
 module github.com/girino/saint-michaels-mirror
 
-go 1.24.1
+go 1.25.3
 
 require (
 	github.com/fiatjaf/khatru v0.19.1
+	github.com/girino/nostr-lib v0.0.0-20251025181253-5f54ef99ce05
 	github.com/nbd-wtf/go-nostr v0.52.0
 )
 
