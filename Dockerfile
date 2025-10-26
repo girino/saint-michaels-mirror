@@ -8,7 +8,7 @@
 
 # Multi-stage Dockerfile for Espelho de São Miguel
 # Build stage
-FROM golang:1.24.1-bullseye AS builder
+FROM golang:1.25.3-bullseye AS builder
 WORKDIR /src
 
 # Accept build arguments for target architecture
