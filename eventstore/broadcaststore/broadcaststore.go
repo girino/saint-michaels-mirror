@@ -102,6 +102,16 @@ func (bs *BroadcastStore) ReplaceEvent(ctx context.Context, evt *nostr.Event) er
 	return bs.SaveEvent(ctx, evt)
 }
 
+// RejectEvent checks if an event should be rejected based on whether it's already cached
+func (bs *BroadcastStore) RejectEvent(ctx context.Context, evt *nostr.Event) (bool, string) {
+	// If event is already cached, reject it as a duplicate
+	if bs.broadcastSystem.IsEventCached(evt.ID) {
+		logging.DebugMethod("broadcaststore", "RejectEvent", "Event %s is already cached, rejecting as duplicate", evt.ID)
+		return true, "duplicate: event already exists"
+	}
+	return false, ""
+}
+
 // GetStatsName returns the name of this stats provider
 func (bs *BroadcastStore) GetStatsName() string {
 	return "broadcaststore"

@@ -309,6 +309,7 @@ func main() {
 	// Use broadcaststore for SaveEvent if available, otherwise use relaystore
 	if bs != nil {
 		r.StoreEvent = append(r.StoreEvent, bs.SaveEvent)
+		r.RejectEvent = append(r.RejectEvent, bs.RejectEvent)
 	} else {
 		r.StoreEvent = append(r.StoreEvent, rs.SaveEvent)
 	}
