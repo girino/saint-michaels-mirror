@@ -102,7 +102,7 @@ Run with the `--help` flag to see all available options:
 ```
 
 You'll see the new flags:
-- `--max-publish-relays` (was `--broadcast-top-n`)
+- `--max-publish-relays` (new, replaces removed PUBLISH_REMOTES configuration)
 - `--broadcast-seed-relays` (new)
 - `--broadcast-workers` (new)
 - `--broadcast-cache-ttl` (new)
@@ -126,7 +126,7 @@ Check the `/health` and `/stats` endpoints to ensure all systems are operational
 | Old Name (v1.3.0) | New Name (v1.4.0) | Notes |
 |-------------------|-------------------|-------|
 | `PUBLISH_REMOTES` | (removed) | No longer needed; broadcast system discovers relays automatically |
-| `BROADCAST_TOP_N` | `MAX_PUBLISH_RELAYS` | Renamed for clarity |
+| - | `MAX_PUBLISH_RELAYS` | New parameter for maximum publish relays |
 
 ### New Parameters
 
