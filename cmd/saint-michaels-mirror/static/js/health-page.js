@@ -78,25 +78,27 @@ function populateHealth(data) {
 
   // Health indicators
   const mainHealthEl = document.getElementById('main-health');
-  mainHealthEl.textContent = data.main_health_state;
-  mainHealthEl.className = `health-indicator ${getHealthClass(data.main_health_state)}`;
+  mainHealthEl.textContent = data.main_health_state || 'UNKNOWN';
+  mainHealthEl.className = `health-indicator ${getHealthClass(data.main_health_state || 'GREEN')}`;
 
+  // Publish health - use broadcast_health_state if available, otherwise publish_health_state
+  const publishHealthState = data.broadcast_health_state || data.publish_health_state || 'N/A';
   const publishHealthEl = document.getElementById('publish-health');
-  publishHealthEl.textContent = data.publish_health_state;
-  publishHealthEl.className = `health-indicator ${getHealthClass(data.publish_health_state)}`;
+  publishHealthEl.textContent = publishHealthState;
+  publishHealthEl.className = `health-indicator ${getHealthClass(publishHealthState)}`;
 
   const queryHealthEl = document.getElementById('query-health');
-  queryHealthEl.textContent = data.query_health_state;
-  queryHealthEl.className = `health-indicator ${getHealthClass(data.query_health_state)}`;
+  queryHealthEl.textContent = data.query_health_state || 'UNKNOWN';
+  queryHealthEl.className = `health-indicator ${getHealthClass(data.query_health_state || 'GREEN')}`;
 
   const mirrorHealthEl = document.getElementById('mirror-health');
-  mirrorHealthEl.textContent = data.mirror_health_state;
-  mirrorHealthEl.className = `health-indicator ${getHealthClass(data.mirror_health_state)}`;
+  mirrorHealthEl.textContent = data.mirror_health_state || 'N/A';
+  mirrorHealthEl.className = `health-indicator ${getHealthClass(data.mirror_health_state || 'GREEN')}`;
 
-  // Failure tracking
-  document.getElementById('publish-failures').textContent = data.consecutive_publish_failures;
-  document.getElementById('query-failures').textContent = data.consecutive_query_failures;
-  document.getElementById('mirror-failures').textContent = data.consecutive_mirror_failures;
+  // Failure tracking - use broadcast failures if available
+  document.getElementById('publish-failures').textContent = data.consecutive_broadcast_failures || data.consecutive_publish_failures || '-';
+  document.getElementById('query-failures').textContent = data.consecutive_query_failures || '-';
+  document.getElementById('mirror-failures').textContent = data.consecutive_mirror_failures || '-';
 }
 
 async function loadHealth() {
