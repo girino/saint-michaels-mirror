@@ -128,30 +128,16 @@ func (bs *BroadcastStore) GetStatsName() string {
 // GetStats returns stats as JsonEntity
 func (bs *BroadcastStore) GetStats() jsonlib.JsonEntity {
 	obj := jsonlib.NewJsonObject()
-
-	// Get stats from broadcast system (includes broadcaster and manager stats)
-	broadcastStats := bs.broadcastSystem.GetStats()
-	broadcastStatsObj, ok := broadcastStats.(*jsonlib.JsonObject)
-	if ok {
-		// Add broadcaster stats to our stats object
-		if broadcasterStats, exists := broadcastStatsObj.Get("broadcaster"); exists {
-			obj.Set("broadcaster", broadcasterStats)
-		}
-		if managerStats, exists := broadcastStatsObj.Get("manager"); exists {
-			obj.Set("manager", managerStats)
-		}
-		if timestamp, exists := broadcastStatsObj.Get("timestamp"); exists {
-			obj.Set("timestamp", timestamp)
-		}
-	}
-
-	// Add our local stats
+	
+	// Only return our local BroadcastStore-specific stats
+	// The broadcaster and manager stats are already registered globally
+	// and will appear at the top level in GetAllStats()
 	obj.Set("attempts", jsonlib.NewJsonValue(atomic.LoadInt64(&bs.attempts)))
 	obj.Set("successes", jsonlib.NewJsonValue(atomic.LoadInt64(&bs.successes)))
 	obj.Set("failures", jsonlib.NewJsonValue(atomic.LoadInt64(&bs.failures)))
 	obj.Set("consecutive_failures", jsonlib.NewJsonValue(atomic.LoadInt64(&bs.consecutiveFailures)))
 	obj.Set("cache_size", jsonlib.NewJsonValue(int64(bs.getCacheSize())))
-
+	
 	return obj
 }
 
