@@ -95,6 +95,10 @@ function populateHealth(data) {
   mirrorHealthEl.textContent = data.mirror_health_state || 'N/A';
   mirrorHealthEl.className = `health-indicator ${getHealthClass(data.mirror_health_state || 'GREEN')}`;
 
+  const goroutineHealthEl = document.getElementById('goroutine-health');
+  goroutineHealthEl.textContent = data.goroutine_health_state || 'N/A';
+  goroutineHealthEl.className = `health-indicator ${getHealthClass(data.goroutine_health_state || 'GREEN')}`;
+
   // Failure tracking - use broadcast failures if available
   document.getElementById('publish-failures').textContent = data.consecutive_broadcast_failures || data.consecutive_publish_failures || '-';
   document.getElementById('query-failures').textContent = data.consecutive_query_failures || '-';

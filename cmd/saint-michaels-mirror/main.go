@@ -350,9 +350,11 @@ func main() {
 		relayStatsEntity, _ := allStats.Get("relay")
 		mirrorStatsEntity, _ := allStats.Get("mirror")
 		broadcastStatsEntity, _ := allStats.Get("broadcaststore")
+		appStatsEntity, _ := allStats.Get("app")
 		relayStatsObj, _ := relayStatsEntity.(*jsonlib.JsonObject)
 		mirrorStatsObj, _ := mirrorStatsEntity.(*jsonlib.JsonObject)
 		broadcastStatsObj, _ := broadcastStatsEntity.(*jsonlib.JsonObject)
+		appStatsObj, _ := appStatsEntity.(*jsonlib.JsonObject)
 
 		// Extract health states
 		var mainHealthState string
@@ -360,6 +362,7 @@ func main() {
 		var queryHealthState string
 		var mirrorHealthState string
 		var broadcastHealthState string
+		var goroutineHealthState string
 		var consecutivePublishFailures int64
 		var consecutiveQueryFailures int64
 		var consecutiveMirrorFailures int64
@@ -427,6 +430,22 @@ func main() {
 			}
 		}
 
+		if appStatsObj != nil {
+			if goroutinesObj, ok := appStatsObj.Get("goroutines"); ok {
+				if goroutinesVal, ok := goroutinesObj.(*jsonlib.JsonObject); ok {
+					if state, ok := goroutinesVal.Get("health_state"); ok {
+						if val, ok := state.(*jsonlib.JsonValue); ok {
+							goroutineHealthState, _ = val.GetString()
+							// Use goroutine health state if it's worse
+							if goroutineHealthState == "RED" || (goroutineHealthState == "YELLOW" && mainHealthState == "GREEN") {
+								mainHealthState = goroutineHealthState
+							}
+						}
+					}
+				}
+			}
+		}
+
 		// Determine HTTP status
 		var httpStatus int
 		var status string
@@ -455,6 +474,7 @@ func main() {
 		health.Set("query_health_state", jsonlib.NewJsonValue(queryHealthState))
 		health.Set("mirror_health_state", jsonlib.NewJsonValue(mirrorHealthState))
 		health.Set("broadcast_health_state", jsonlib.NewJsonValue(broadcastHealthState))
+		health.Set("goroutine_health_state", jsonlib.NewJsonValue(goroutineHealthState))
 		health.Set("consecutive_publish_failures", jsonlib.NewJsonValue(consecutivePublishFailures))
 		health.Set("consecutive_query_failures", jsonlib.NewJsonValue(consecutiveQueryFailures))
 		health.Set("consecutive_mirror_failures", jsonlib.NewJsonValue(consecutiveMirrorFailures))
