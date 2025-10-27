@@ -2,6 +2,44 @@
 
 Instruction for AI agents editing this file: prioritize human-friendly, user-facing functionality; de-emphasize CI/CD and infrastructure-only changes.
 
+## v1.4.0 — 2025-01-27
+
+### 🏗️ Major Architecture Refactoring
+- **Separation of Query and Publish**: RelayStore is now query-only, BroadcastStore handles all event publishing.
+- **Custom JSON Library**: Introduced ordered JSON structures with `JsonObject`, `JsonValue`, and `JsonList` that preserve field order.
+- **Global Stats Collection**: Singleton stats collector with automatic component registration for unified statistics.
+- **Package Reorganization**: Moved BroadcastStore to `nostr-lib/eventstore/broadcaststore` for better code organization.
+
+### 📊 Statistics & Monitoring Improvements
+- **Ordered Statistics**: All statistics now display in a consistent, meaningful order thanks to ordered JSON objects.
+- **Type-Safe Stats**: Replaced `interface{}` with `JsonEntity` for better type safety and compile-time checking.
+- **Enhanced Health Monitoring**: Added broadcast store health indicators and improved main health calculation.
+- **Unified API**: Single `stats.GetCollector().GetAllStats()` call for all statistics from all components.
+
+### ⚙️ Configuration System Overhaul
+- **Command-Line Flags**: Every environment variable now has a corresponding command-line flag for better flexibility.
+- **Removed PUBLISH_REMOTES**: No longer needed as broadcast system handles relay discovery automatically.
+- **Renamed MAX_PUBLISH_RELAYS**: More descriptive name (was BROADCAST_TOP_N).
+- **Simplified RelayStore**: Removed unused `publishUrls` and `relaySecKey` parameters.
+
+### 🔧 Technical Improvements
+- **Broadcast System**: Intelligent relay discovery and ranking by success rate for optimal event delivery.
+- **Cache Optimization**: Removed redundant local caches, uses broadcaster's cache directly.
+- **Health States**: Three-tier color system (Green, Yellow, Red) with granular indicators for each subsystem.
+- **Stats Duplication Fix**: Eliminated duplicate statistics in the `/stats` endpoint.
+
+### 📝 API Changes
+- **RelayStore**: Query-only with no-op `SaveEvent()`, `ReplaceEvent()`, `DeleteEvent()` methods.
+- **StatsProvider**: Now returns `json.JsonEntity` instead of `interface{}`.
+- **BroadcastStore**: New store for publishing events with intelligent relay selection.
+- **Configuration Priority**: CLI flags override environment variables, which override defaults.
+
+### 🐛 Bug Fixes
+- **Fixed stats ordering**: Statistics now display in a consistent order.
+- **Fixed broadcast cache**: Removed redundant local cache implementation.
+- **Fixed stats duplication**: Eliminated duplicate stats in stats endpoint.
+- **Fixed health endpoint**: Now correctly uses global stats collector.
+
 ## v1.3.0 — 2025-01-23
 
 ### 🚀 Major Logging Refactoring
