@@ -16,7 +16,7 @@ function getHealthClass(state) {
     case 'GREEN': return 'health-green';
     case 'YELLOW': return 'health-yellow';
     case 'RED': return 'health-red';
-    default: return 'health-green';
+    default: return 'health-gray';
   }
 }
 
@@ -78,8 +78,9 @@ function populateHealth(data) {
 
   // Health indicators
   const mainHealthEl = document.getElementById('main-health');
-  mainHealthEl.textContent = data.main_health_state || 'UNKNOWN';
-  mainHealthEl.className = `health-indicator ${getHealthClass(data.main_health_state || 'GREEN')}`;
+  const mainHealthStateText = data.main_health_state || 'UNKNOWN';
+  mainHealthEl.textContent = mainHealthStateText;
+  mainHealthEl.className = `health-indicator ${getHealthClass(mainHealthStateText)}`;
 
   // Publish health - use broadcast_health_state if available, otherwise publish_health_state
   const publishHealthState = data.broadcast_health_state || data.publish_health_state || 'N/A';
@@ -88,16 +89,19 @@ function populateHealth(data) {
   publishHealthEl.className = `health-indicator ${getHealthClass(publishHealthState)}`;
 
   const queryHealthEl = document.getElementById('query-health');
-  queryHealthEl.textContent = data.query_health_state || 'UNKNOWN';
-  queryHealthEl.className = `health-indicator ${getHealthClass(data.query_health_state || 'GREEN')}`;
+  const queryHealthStateText = data.query_health_state || 'UNKNOWN';
+  queryHealthEl.textContent = queryHealthStateText;
+  queryHealthEl.className = `health-indicator ${getHealthClass(queryHealthStateText)}`;
 
   const mirrorHealthEl = document.getElementById('mirror-health');
-  mirrorHealthEl.textContent = data.mirror_health_state || 'N/A';
-  mirrorHealthEl.className = `health-indicator ${getHealthClass(data.mirror_health_state || 'GREEN')}`;
+  const mirrorHealthStateText = data.mirror_health_state || 'N/A';
+  mirrorHealthEl.textContent = mirrorHealthStateText;
+  mirrorHealthEl.className = `health-indicator ${getHealthClass(mirrorHealthStateText)}`;
 
   const goroutineHealthEl = document.getElementById('goroutine-health');
-  goroutineHealthEl.textContent = data.goroutine_health_state || 'N/A';
-  goroutineHealthEl.className = `health-indicator ${getHealthClass(data.goroutine_health_state || 'GREEN')}`;
+  const goroutineHealthStateText = data.goroutine_health_state || 'N/A';
+  goroutineHealthEl.textContent = goroutineHealthStateText;
+  goroutineHealthEl.className = `health-indicator ${getHealthClass(goroutineHealthStateText)}`;
 
   // Failure tracking - use broadcast failures if available
   document.getElementById('publish-failures').textContent = data.consecutive_broadcast_failures || data.consecutive_publish_failures || '-';

@@ -30,7 +30,7 @@ function getHealthClass(state) {
     case 'GREEN': return 'health-green';
     case 'YELLOW': return 'health-yellow';
     case 'RED': return 'health-red';
-    default: return 'health-green';
+    default: return 'health-gray';
   }
 }
 

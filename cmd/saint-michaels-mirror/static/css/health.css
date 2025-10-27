@@ -72,6 +72,11 @@
   color: #fff;
 }
 
+.health-gray {
+  background: #6b7280;
+  color: #fff;
+}
+
 .status-healthy {
   background: #22c55e;
   color: #000;
