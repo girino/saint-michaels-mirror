@@ -4,7 +4,7 @@ go 1.25.3
 
 require (
 	github.com/fiatjaf/khatru v0.19.1
-	github.com/girino/nostr-lib v0.0.0-20251027005154-c07b0d04d504
+	github.com/girino/nostr-lib v0.0.0-20251027005324-38688d35c4f9
 	github.com/nbd-wtf/go-nostr v0.52.0
 )
 

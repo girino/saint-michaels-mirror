@@ -21,7 +21,7 @@ import (
 	"github.com/fiatjaf/khatru"
 	"github.com/fiatjaf/khatru/policies"
 	"github.com/girino/nostr-lib/broadcast"
-	"github.com/girino/nostr-lib/broadcaststore"
+	"github.com/girino/nostr-lib/eventstore/broadcaststore"
 	"github.com/girino/nostr-lib/eventstore/relaystore"
 	jsonlib "github.com/girino/nostr-lib/json"
 	"github.com/girino/nostr-lib/logging"
