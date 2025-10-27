@@ -133,6 +133,10 @@ function populateStats(data) {
   document.getElementById('perf-count-avg').textContent = formatDuration(data.relay?.average_count_duration_ms || 0);
   document.getElementById('perf-query-total').textContent = formatDuration(data.relay?.total_query_duration_ms || 0);
   document.getElementById('perf-count-total').textContent = formatDuration(data.relay?.total_count_duration_ms || 0);
+  
+  // Save execution time stats
+  document.getElementById('perf-broadcast-avg').textContent = formatDuration(data.broadcaststore?.average_execution_ms || 0);
+  document.getElementById('perf-broadcast-total').textContent = formatDuration(data.broadcaststore?.total_execution_ms || 0);
 }
 
 async function loadStats() {
