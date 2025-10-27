@@ -64,35 +64,35 @@ function populateStats(data) {
   document.getElementById('app-uptime').textContent = `${Math.floor((data.app?.uptime || 0) / 60)}m ${Math.floor((data.app?.uptime || 0) % 60)}s`;
   
   // Fix goroutines access - it's nested as an object with count and health_state
-  const goroutineCount = data.app?.goroutines?.count || '-';
+  const goroutineCount = data.app?.goroutines?.count ?? 0;
   document.getElementById('app-goroutines').textContent = goroutineCount;
   
   document.getElementById('app-memory-used').textContent = formatBytes(data.app?.memory?.heap_alloc_bytes || 0);
   document.getElementById('app-memory-total').textContent = formatBytes(data.app?.memory?.sys_bytes || 0);
-  document.getElementById('app-gc-cycles').textContent = data.app?.gc?.cycles || '-';
+  document.getElementById('app-gc-cycles').textContent = data.app?.gc?.cycles ?? 0;
 
   // Broadcast operations (publish stats moved here)
-  document.getElementById('relay-publish-attempts').textContent = data.broadcaststore?.attempts || '-';
-  document.getElementById('relay-publish-successes').textContent = data.broadcaststore?.successes || '-';
-  document.getElementById('relay-publish-failures').textContent = data.broadcaststore?.failures || '-';
+  document.getElementById('relay-publish-attempts').textContent = data.broadcaststore?.attempts ?? 0;
+  document.getElementById('relay-publish-successes').textContent = data.broadcaststore?.successes ?? 0;
+  document.getElementById('relay-publish-failures').textContent = data.broadcaststore?.failures ?? 0;
   
   // Query operations
-  document.getElementById('relay-query-requests').textContent = data.relay?.query_requests || '-';
-  document.getElementById('relay-query-events').textContent = data.relay?.query_events_returned || '-';
-  document.getElementById('relay-count-requests').textContent = data.relay?.count_requests || '-';
+  document.getElementById('relay-query-requests').textContent = data.relay?.query_requests ?? 0;
+  document.getElementById('relay-query-events').textContent = data.relay?.query_events_returned ?? 0;
+  document.getElementById('relay-count-requests').textContent = data.relay?.count_requests ?? 0;
 
   // Mirroring operations
-  document.getElementById('relay-mirrored-events').textContent = data.mirror?.mirrored_events || '-';
+  document.getElementById('relay-mirrored-events').textContent = data.mirror?.mirrored_events ?? 0;
   // Calculate attempts as successes + failures
   const successes = data.mirror?.mirror_successes || 0;
   const failures = data.mirror?.mirror_failures || 0;
   document.getElementById('relay-mirror-attempts').textContent = successes + failures;
-  document.getElementById('relay-mirror-successes').textContent = data.mirror?.mirror_successes || '-';
-  document.getElementById('relay-mirror-failures').textContent = data.mirror?.mirror_failures || '-';
+  document.getElementById('relay-mirror-successes').textContent = data.mirror?.mirror_successes ?? 0;
+  document.getElementById('relay-mirror-failures').textContent = data.mirror?.mirror_failures ?? 0;
 
   // Relay health
-  document.getElementById('relay-live-count').textContent = data.mirror?.live_relays || '-';
-  document.getElementById('relay-dead-count').textContent = data.mirror?.dead_relays || '-';
+  document.getElementById('relay-live-count').textContent = data.mirror?.live_relays ?? 0;
+  document.getElementById('relay-dead-count').textContent = data.mirror?.dead_relays ?? 0;
   document.getElementById('relay-total-count').textContent = (data.mirror?.live_relays || 0) + (data.mirror?.dead_relays || 0);
 
   // Health status
@@ -124,9 +124,9 @@ function populateStats(data) {
   goroutineHealthEl.className = `health-indicator ${getHealthClass(goroutineHealthState)}`;
 
   // Failure counts - publish failures now from broadcaststore
-  document.getElementById('health-publish-failures').textContent = data.broadcaststore?.consecutive_failures || '-';
-  document.getElementById('health-query-failures').textContent = data.relay?.consecutive_query_failures || '-';
-  document.getElementById('health-mirror-failures').textContent = data.mirror?.consecutive_mirror_failures || '-';
+  document.getElementById('health-publish-failures').textContent = data.broadcaststore?.consecutive_failures ?? 0;
+  document.getElementById('health-query-failures').textContent = data.relay?.consecutive_query_failures ?? 0;
+  document.getElementById('health-mirror-failures').textContent = data.mirror?.consecutive_mirror_failures ?? 0;
 
   // Performance - publish stats removed from relay
   document.getElementById('perf-publish-avg').textContent = '-'; // No longer tracked in relay
