@@ -83,7 +83,10 @@ function populateStats(data) {
 
   // Mirroring operations
   document.getElementById('relay-mirrored-events').textContent = data.mirror?.mirrored_events || '-';
-  document.getElementById('relay-mirror-attempts').textContent = '-'; // Removed: no longer tracked
+  // Calculate attempts as successes + failures
+  const successes = data.mirror?.mirror_successes || 0;
+  const failures = data.mirror?.mirror_failures || 0;
+  document.getElementById('relay-mirror-attempts').textContent = successes + failures;
   document.getElementById('relay-mirror-successes').textContent = data.mirror?.mirror_successes || '-';
   document.getElementById('relay-mirror-failures').textContent = data.mirror?.mirror_failures || '-';
 
