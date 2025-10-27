@@ -271,7 +271,7 @@ func main() {
 	if len(cfg.BroadcastSeedRelays) > 0 {
 		// Create broadcast config
 		broadcastConfig := &broadcast.Config{
-			TopNRelays:       cfg.BroadcastTopN,
+			TopNRelays:       cfg.MaxPublishRelays,
 			SuccessRateDecay: 0.9,
 			MandatoryRelays:  cfg.BroadcastMandatoryRelays,
 			WorkerCount:      cfg.BroadcastWorkers,

@@ -40,7 +40,7 @@ type Config struct {
 	RelayBanner      string
 
 	// Broadcast settings
-	BroadcastTopN            int
+	MaxPublishRelays         int
 	BroadcastWorkers         int
 	BroadcastCacheTTL        string
 	BroadcastSeedRelays      []string
@@ -72,14 +72,14 @@ func LoadConfig() *Config {
 	relayBanner := flag.String("relay-banner", os.Getenv("RELAY_BANNER"), "relay banner URL (env: RELAY_BANNER)")
 
 	// Broadcast settings
-	envBroadcastTopN := os.Getenv("BROADCAST_TOP_N")
-	broadcastTopNVal := 10
-	if envBroadcastTopN != "" {
-		if v, err := strconv.Atoi(envBroadcastTopN); err == nil {
-			broadcastTopNVal = v
+	envMaxPublishRelays := os.Getenv("MAX_PUBLISH_RELAYS")
+	maxPublishRelaysVal := 10
+	if envMaxPublishRelays != "" {
+		if v, err := strconv.Atoi(envMaxPublishRelays); err == nil {
+			maxPublishRelaysVal = v
 		}
 	}
-	broadcastTopN := flag.Int("broadcast-top-n", broadcastTopNVal, "number of top relays to use for broadcasting (env: BROADCAST_TOP_N)")
+	maxPublishRelays := flag.Int("max-publish-relays", maxPublishRelaysVal, "maximum number of top relays to use for publishing events (env: MAX_PUBLISH_RELAYS)")
 
 	envBroadcastWorkers := os.Getenv("BROADCAST_WORKERS")
 	broadcastWorkersVal := 5
@@ -126,7 +126,7 @@ func LoadConfig() *Config {
 		RelayIcon:        *relayIcon,
 		RelayBanner:      *relayBanner,
 
-		BroadcastTopN:            *broadcastTopN,
+		MaxPublishRelays:         *maxPublishRelays,
 		BroadcastWorkers:         *broadcastWorkers,
 		BroadcastCacheTTL:        *broadcastCacheTTL,
 		BroadcastSeedRelays:      broadcastSeedList,
