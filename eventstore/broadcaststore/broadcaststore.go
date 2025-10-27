@@ -106,6 +106,7 @@ func (bs *BroadcastStore) QueryEvents(ctx context.Context, filter nostr.Filter) 
 
 // DeleteEvent broadcasts a delete event (kind 5)
 func (bs *BroadcastStore) DeleteEvent(ctx context.Context, evt *nostr.Event) error {
+
 	logging.DebugMethod("broadcaststore", "DeleteEvent", "DeleteEvent called for event %s", evt.ID)
 
 	// For now, we just return nil as the event was already deleted
@@ -127,11 +128,30 @@ func (bs *BroadcastStore) GetStatsName() string {
 // GetStats returns stats as JsonEntity
 func (bs *BroadcastStore) GetStats() jsonlib.JsonEntity {
 	obj := jsonlib.NewJsonObject()
+
+	// Get stats from broadcast system (includes broadcaster and manager stats)
+	broadcastStats := bs.broadcastSystem.GetStats()
+	broadcastStatsObj, ok := broadcastStats.(*jsonlib.JsonObject)
+	if ok {
+		// Add broadcaster stats to our stats object
+		if broadcasterStats, exists := broadcastStatsObj.Get("broadcaster"); exists {
+			obj.Set("broadcaster", broadcasterStats)
+		}
+		if managerStats, exists := broadcastStatsObj.Get("manager"); exists {
+			obj.Set("manager", managerStats)
+		}
+		if timestamp, exists := broadcastStatsObj.Get("timestamp"); exists {
+			obj.Set("timestamp", timestamp)
+		}
+	}
+
+	// Add our local stats
 	obj.Set("attempts", jsonlib.NewJsonValue(atomic.LoadInt64(&bs.attempts)))
 	obj.Set("successes", jsonlib.NewJsonValue(atomic.LoadInt64(&bs.successes)))
 	obj.Set("failures", jsonlib.NewJsonValue(atomic.LoadInt64(&bs.failures)))
 	obj.Set("consecutive_failures", jsonlib.NewJsonValue(atomic.LoadInt64(&bs.consecutiveFailures)))
 	obj.Set("cache_size", jsonlib.NewJsonValue(int64(bs.getCacheSize())))
+
 	return obj
 }
 
