@@ -277,13 +277,6 @@ func main() {
 	// initialize broadcaststore if seed relays are configured
 	var bs *broadcaststore.BroadcastStore
 	if len(cfg.BroadcastSeedRelays) > 0 {
-		// Parse cache TTL
-		cacheTTL, err := time.ParseDuration(cfg.BroadcastCacheTTL)
-		if err != nil {
-			logging.Warn("failed to parse BROADCAST_CACHE_TTL, using default 1h: %v", err)
-			cacheTTL = time.Hour
-		}
-
 		// Create broadcast config
 		broadcastConfig := &broadcast.Config{
 			TopNRelays:       cfg.BroadcastTopN,
@@ -295,7 +288,7 @@ func main() {
 		}
 
 		// Create broadcaststore
-		bs = broadcaststore.NewBroadcastStore(broadcastConfig, cacheTTL, 10)
+		bs = broadcaststore.NewBroadcastStore(broadcastConfig, 10)
 		if err := bs.Init(); err != nil {
 			logging.Fatal("initializing broadcaststore: %v", err)
 		}
