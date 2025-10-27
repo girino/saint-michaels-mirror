@@ -128,11 +128,9 @@ function populateStats(data) {
   document.getElementById('health-query-failures').textContent = data.relay?.consecutive_query_failures ?? 0;
   document.getElementById('health-mirror-failures').textContent = data.mirror?.consecutive_mirror_failures ?? 0;
 
-  // Performance - publish stats removed from relay
-  document.getElementById('perf-publish-avg').textContent = '-'; // No longer tracked in relay
+  // Performance
   document.getElementById('perf-query-avg').textContent = formatDuration(data.relay?.average_query_duration_ms || 0);
   document.getElementById('perf-count-avg').textContent = formatDuration(data.relay?.average_count_duration_ms || 0);
-  document.getElementById('perf-publish-total').textContent = '-'; // No longer tracked
   document.getElementById('perf-query-total').textContent = formatDuration(data.relay?.total_query_duration_ms || 0);
   document.getElementById('perf-count-total').textContent = formatDuration(data.relay?.total_count_duration_ms || 0);
 }
