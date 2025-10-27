@@ -1,6 +1,6 @@
 # Release Notes - Espelho de São Miguel v1.4.0
 
-**Release Date**: January 27, 2025  
+**Release Date**: October 27, 2025  
 **Version**: 1.4.0  
 **Codename**: "The Divider of Worlds"
 
@@ -8,9 +8,41 @@
 
 ## 🌟 Overview
 
-Version 1.4.0 represents a fundamental architectural shift in the Espelho de São Miguel, introducing a complete separation of query and publish responsibilities, along with a custom JSON library for ordered data structures and a global stats collection system. This release transforms the relay into a more modular, maintainable, and flexible system with improved statistics tracking and health monitoring.
+Version 1.4.0 represents a fundamental architectural shift in the Espelho de São Miguel, introducing a complete separation of query and publish responsibilities, along with a custom JSON library for ordered data structures and a global stats collection system. This release transforms the relay into a more modular, maintainable, and flexible system with improved statistics tracking and health monitoring, plus performance optimizations and enhanced monitoring capabilities.
 
 ## 🚀 Major Features
+
+### ⚡ Performance & Scalability Enhancements
+
+**Auto-Scaling Broadcast Workers:**
+- Broadcast worker count now automatically defaults to 2× the number of CPU cores
+- Optimizes performance based on available system resources
+- No manual tuning required for most deployments
+- Scale automatically with your hardware
+
+**Mandatory Relay Support:**
+- `BROADCAST_MANDATORY_RELAYS` configuration now properly registers mandatory relays with the broadcast manager
+- Ensures critical relays always receive events regardless of their performance score
+- Essential for ensuring events reach specific relays (e.g., your own relay or backup systems)
+- Configurable per-deployment needs
+
+### 📊 Enhanced Monitoring & Statistics
+
+**Execution Time Tracking:**
+- Comprehensive execution time statistics for broadcaststore operations (SaveEvent)
+- Matches the monitoring pattern used in relaystore for consistency
+- Tracks average and total execution times for performance analysis
+- Excludes cached events from timing for accurate metrics
+
+**Stats Page Improvements:**
+- New "Avg Save Duration" metric in Performance section
+- New "Total Save Time" metric for cumulative tracking
+- Performance statistics logically grouped with averages first, then totals
+- Better visibility into broadcast performance
+
+**Updated Dependencies:**
+- Upgraded to nostr-lib with execution time tracking support
+- Better performance visibility across all operations
 
 ### 🎯 Separation of Query and Publish Stores
 
@@ -227,11 +259,11 @@ Every environment variable now has a corresponding command-line flag:
 - `--relay-banner`: Banner URL
 
 **Broadcast Settings:**
-- `--max-publish-relays`: Maximum relays for publishing
-- `--broadcast-workers`: Worker goroutines
-- `--broadcast-cache-ttl`: Cache TTL
-- `--broadcast-seed-relays`: Seed relays
-- `--broadcast-mandatory-relays`: Mandatory relays
+- `--max-publish-relays`: Maximum relays for publishing (default: 50)
+- `--broadcast-workers`: Worker goroutines (default: 2 × CPU cores, auto-scaling)
+- `--broadcast-cache-ttl`: Cache TTL (default: 1h)
+- `--broadcast-seed-relays`: Seed relays for discovery
+- `--broadcast-mandatory-relays`: Mandatory relays (always included in broadcasts)
 
 ## 🐛 Bug Fixes
 
@@ -239,6 +271,8 @@ Every environment variable now has a corresponding command-line flag:
 - **Fixed broadcast cache**: Removed redundant local cache, uses broadcaster's cache
 - **Fixed stats duplication**: Eliminated duplicate stats in `/stats` endpoint
 - **Fixed health endpoint**: Now correctly uses global stats collector
+- **Fixed mandatory relay registration**: Mandatory relays are now properly registered with the broadcast manager for tracking and prioritization
+- **Fixed stats page layout**: Performance metrics are now logically grouped with averages first, totals after
 
 ## 🔄 Migration Guide
 
@@ -254,6 +288,8 @@ Every environment variable now has a corresponding command-line flag:
 2. Remove `PUBLISH_REMOTES` environment variable
 3. Update `BROADCAST_TOP_N` to `MAX_PUBLISH_RELAYS`
 4. Configure `--broadcast-seed-relays` for broadcast discovery
+5. (Optional) Set `BROADCAST_MANDATORY_RELAYS` for critical relays
+6. (Optional) Configure `BROADCAST_WORKERS` (defaults to 2× CPU cores)
 
 **Example Migration:**
 
@@ -268,7 +304,9 @@ BROADCAST_TOP_N=10
 ```bash
 QUERY_REMOTES=wss://relay1.com,wss://relay2.com
 MAX_PUBLISH_RELAYS=10
-BROADCAST_SEED_RELAYS=wss://relay1.com,wss://relay2.com
+BROADCAST_SEED_RELAYS=wss://relay.damus.io,wss://relay.nostr.band
+BROADCAST_MANDATORY_RELAYS=wss://relay1.com
+# BROADCAST_WORKERS defaults to 2 × CPU cores (auto-scaling)
 ```
 
 ### For Developers
