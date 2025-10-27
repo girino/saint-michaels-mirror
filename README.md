@@ -73,9 +73,8 @@ export QUERY_REMOTES="wss://relay1.example.com,wss://relay2.example.com"
 Create a `.env` file with your configuration:
 
 ```bash
-# Required: Remote relays to use
+# Required: Remote relays to query
 QUERY_REMOTES=wss://relay1.example.com,wss://relay2.example.com
-PUBLISH_REMOTES=wss://relay1.example.com,wss://relay2.example.com
 
 # Required: Relay identity
 RELAY_NAME="Espelho de São Miguel"
@@ -86,6 +85,16 @@ RELAY_CONTACT=npub1your-contact-npub-here
 RELAY_SERVICE_URL=https://your-relay.com
 RELAY_ICON=static/icon.png
 RELAY_BANNER=static/banner.png
+
+# Optional: Broadcast configuration
+# Seed relays for automatic relay discovery and ranking
+BROADCAST_SEED_RELAYS=wss://relay.damus.io,wss://relay.nostr.band
+# Mandatory relays that always receive events
+BROADCAST_MANDATORY_RELAYS=wss://my-essential-relay.com
+# Maximum top relays to publish to (default: 50)
+MAX_PUBLISH_RELAYS=50
+# Worker count (default: 2 × CPU cores, auto-detect)
+BROADCAST_WORKERS=10
 
 # Optional: Server settings
 ADDR=:3337
@@ -104,9 +113,12 @@ COMPOSE_RELAY_PORT=3337
 | Variable | Required | Description | Default |
 |----------|----------|-------------|---------|
 | `QUERY_REMOTES` | ✅ | Comma-separated list of relays to query | - |
-| `PUBLISH_REMOTES` | ✅ | Comma-separated list of relays to forward to | - |
 | `RELAY_NAME` | ✅ | Display name of your relay | "Espelho de São Miguel" |
 | `RELAY_DESCRIPTION` | ✅ | Description of your relay | Mythic description |
+| `BROADCAST_SEED_RELAYS` | ❌ | Seed relays for automatic discovery | - |
+| `BROADCAST_MANDATORY_RELAYS` | ❌ | Relays that always receive broadcasts | - |
+| `MAX_PUBLISH_RELAYS` | ❌ | Max top relays to publish to | `50` |
+| `BROADCAST_WORKERS` | ❌ | Number of broadcast workers | `2 × CPU cores` |
 | `RELAY_CONTACT` | ❌ | Contact npub or email | - |
 | `RELAY_SERVICE_URL` | ❌ | Public URL of your relay | - |
 | `RELAY_ICON` | ❌ | Path to relay icon | - |

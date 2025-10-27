@@ -2,7 +2,20 @@
 
 Instruction for AI agents editing this file: prioritize human-friendly, user-facing functionality; de-emphasize CI/CD and infrastructure-only changes.
 
-## v1.4.0 — 2025-01-27
+## v1.4.0 — 2025-10-27
+
+### 🚀 Performance & Scalability
+- **Auto-scaling broadcast workers**: Default broadcast worker count is now automatically set to 2× the number of CPU cores, optimizing performance based on system resources.
+- **Mandatory relay support**: `BROADCAST_MANDATORY_RELAYS` configuration now properly registers mandatory relays with the broadcast manager for tracking and prioritization.
+
+### 📊 Enhanced Monitoring
+- **Execution time tracking**: Added comprehensive execution time statistics for broadcaststore operations (SaveEvent), matching the pattern used in relaystore.
+- **Stats page updates**: Stats page now displays "Avg Save Duration" and "Total Save Time" metrics in the Performance section.
+- **Ordered performance metrics**: Performance statistics are now logically grouped with averages first, then totals.
+
+### 🔧 Technical Improvements
+- **Updated dependencies**: Upgraded to nostr-lib with execution time tracking support.
+- **Better performance visibility**: Monitor actual broadcast execution times, excluding cached events for accurate metrics.
 
 ### 🏗️ Major Architecture Refactoring
 - **Separation of Query and Publish**: RelayStore is now query-only, BroadcastStore handles all event publishing.
