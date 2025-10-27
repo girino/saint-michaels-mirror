@@ -62,15 +62,21 @@ function populateStats(data) {
   // Application stats
   document.getElementById('app-version').textContent = data.app?.version || '-';
   document.getElementById('app-uptime').textContent = `${Math.floor((data.app?.uptime || 0) / 60)}m ${Math.floor((data.app?.uptime || 0) % 60)}s`;
-  document.getElementById('app-goroutines').textContent = data.app?.goroutines?.count || '-';
+  
+  // Fix goroutines access - it's nested as an object with count and health_state
+  const goroutineCount = data.app?.goroutines?.count || '-';
+  document.getElementById('app-goroutines').textContent = goroutineCount;
+  
   document.getElementById('app-memory-used').textContent = formatBytes(data.app?.memory?.heap_alloc_bytes || 0);
   document.getElementById('app-memory-total').textContent = formatBytes(data.app?.memory?.sys_bytes || 0);
   document.getElementById('app-gc-cycles').textContent = data.app?.gc?.cycles || '-';
 
-  // Relay operations
-  document.getElementById('relay-publish-attempts').textContent = data.relay?.publish_attempts || '-';
-  document.getElementById('relay-publish-successes').textContent = data.relay?.publish_successes || '-';
-  document.getElementById('relay-publish-failures').textContent = data.relay?.publish_failures || '-';
+  // Broadcast operations (publish stats moved here)
+  document.getElementById('relay-publish-attempts').textContent = data.broadcaststore?.attempts || '-';
+  document.getElementById('relay-publish-successes').textContent = data.broadcaststore?.successes || '-';
+  document.getElementById('relay-publish-failures').textContent = data.broadcaststore?.failures || '-';
+  
+  // Query operations
   document.getElementById('relay-query-requests').textContent = data.relay?.query_requests || '-';
   document.getElementById('relay-query-events').textContent = data.relay?.query_events_returned || '-';
   document.getElementById('relay-count-requests').textContent = data.relay?.count_requests || '-';
@@ -92,8 +98,9 @@ function populateStats(data) {
   overallHealthEl.textContent = overallHealthState;
   overallHealthEl.className = `health-indicator ${getHealthClass(overallHealthState)}`;
 
+  // Publish health now comes from broadcaststore
   const publishHealthEl = document.getElementById('health-publish');
-  const publishHealthState = data.relay?.publish_health_state || 'UNKNOWN';
+  const publishHealthState = data.broadcaststore?.health_state || 'UNKNOWN';
   publishHealthEl.textContent = publishHealthState;
   publishHealthEl.className = `health-indicator ${getHealthClass(publishHealthState)}`;
 
@@ -107,20 +114,22 @@ function populateStats(data) {
   mirrorHealthEl.textContent = mirrorHealthState;
   mirrorHealthEl.className = `health-indicator ${getHealthClass(mirrorHealthState)}`;
 
+  // Fix goroutine health access - it's nested
   const goroutineHealthEl = document.getElementById('health-goroutines');
   const goroutineHealthState = data.app?.goroutines?.health_state || 'UNKNOWN';
   goroutineHealthEl.textContent = goroutineHealthState;
   goroutineHealthEl.className = `health-indicator ${getHealthClass(goroutineHealthState)}`;
 
-  document.getElementById('health-publish-failures').textContent = data.relay?.consecutive_publish_failures || '-';
+  // Failure counts - publish failures now from broadcaststore
+  document.getElementById('health-publish-failures').textContent = data.broadcaststore?.consecutive_failures || '-';
   document.getElementById('health-query-failures').textContent = data.relay?.consecutive_query_failures || '-';
   document.getElementById('health-mirror-failures').textContent = data.mirror?.consecutive_mirror_failures || '-';
 
-  // Performance
-  document.getElementById('perf-publish-avg').textContent = formatDuration(data.relay?.average_publish_duration_ms || 0);
+  // Performance - publish stats removed from relay
+  document.getElementById('perf-publish-avg').textContent = '-'; // No longer tracked in relay
   document.getElementById('perf-query-avg').textContent = formatDuration(data.relay?.average_query_duration_ms || 0);
   document.getElementById('perf-count-avg').textContent = formatDuration(data.relay?.average_count_duration_ms || 0);
-  document.getElementById('perf-publish-total').textContent = formatDuration(data.relay?.total_publish_duration_ms || 0);
+  document.getElementById('perf-publish-total').textContent = '-'; // No longer tracked
   document.getElementById('perf-query-total').textContent = formatDuration(data.relay?.total_query_duration_ms || 0);
   document.getElementById('perf-count-total').textContent = formatDuration(data.relay?.total_count_duration_ms || 0);
 }
