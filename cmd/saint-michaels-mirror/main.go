@@ -357,17 +357,21 @@ func main() {
 		allStats := stats.GetCollector().GetAllStats()
 		relayStatsEntity, _ := allStats.Get("relay")
 		mirrorStatsEntity, _ := allStats.Get("mirror")
+		broadcastStatsEntity, _ := allStats.Get("broadcaststore")
 		relayStatsObj, _ := relayStatsEntity.(*jsonlib.JsonObject)
 		mirrorStatsObj, _ := mirrorStatsEntity.(*jsonlib.JsonObject)
+		broadcastStatsObj, _ := broadcastStatsEntity.(*jsonlib.JsonObject)
 
 		// Extract health states
 		var mainHealthState string
 		var publishHealthState string
 		var queryHealthState string
 		var mirrorHealthState string
+		var broadcastHealthState string
 		var consecutivePublishFailures int64
 		var consecutiveQueryFailures int64
 		var consecutiveMirrorFailures int64
+		var consecutiveBroadcastFailures int64
 
 		if relayStatsObj != nil {
 			if mainHealthStateVal, ok := relayStatsObj.Get("main_health_state"); ok {
@@ -414,6 +418,23 @@ func main() {
 			}
 		}
 
+		if broadcastStatsObj != nil {
+			if state, ok := broadcastStatsObj.Get("health_state"); ok {
+				if val, ok := state.(*jsonlib.JsonValue); ok {
+					broadcastHealthState, _ = val.GetString()
+				}
+			}
+			if failures, ok := broadcastStatsObj.Get("consecutive_failures"); ok {
+				if val, ok := failures.(*jsonlib.JsonValue); ok {
+					consecutiveBroadcastFailures, _ = val.GetInt()
+				}
+			}
+			// Use broadcast health state if it's worse
+			if broadcastHealthState == "RED" || (broadcastHealthState == "YELLOW" && mainHealthState == "GREEN") {
+				mainHealthState = broadcastHealthState
+			}
+		}
+
 		// Determine HTTP status
 		var httpStatus int
 		var status string
@@ -441,9 +462,11 @@ func main() {
 		health.Set("publish_health_state", jsonlib.NewJsonValue(publishHealthState))
 		health.Set("query_health_state", jsonlib.NewJsonValue(queryHealthState))
 		health.Set("mirror_health_state", jsonlib.NewJsonValue(mirrorHealthState))
+		health.Set("broadcast_health_state", jsonlib.NewJsonValue(broadcastHealthState))
 		health.Set("consecutive_publish_failures", jsonlib.NewJsonValue(consecutivePublishFailures))
 		health.Set("consecutive_query_failures", jsonlib.NewJsonValue(consecutiveQueryFailures))
 		health.Set("consecutive_mirror_failures", jsonlib.NewJsonValue(consecutiveMirrorFailures))
+		health.Set("consecutive_broadcast_failures", jsonlib.NewJsonValue(consecutiveBroadcastFailures))
 
 		// Marshal to JSON
 		jsonData, err := jsonlib.MarshalIndent(health, "", "  ")

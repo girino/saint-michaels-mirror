@@ -129,5 +129,27 @@ func (bs *BroadcastStore) GetStats() jsonlib.JsonEntity {
 	obj.Set("failures", jsonlib.NewJsonValue(atomic.LoadInt64(&bs.failures)))
 	obj.Set("consecutive_failures", jsonlib.NewJsonValue(atomic.LoadInt64(&bs.consecutiveFailures)))
 
+	// Add health state
+	consecutiveFailures := atomic.LoadInt64(&bs.consecutiveFailures)
+	maxFailures := atomic.LoadInt64(&bs.maxConsecutiveFailures)
+	healthState := getHealthState(consecutiveFailures, maxFailures)
+	isHealthy := consecutiveFailures < maxFailures
+
+	obj.Set("health_state", jsonlib.NewJsonValue(healthState))
+	obj.Set("is_healthy", jsonlib.NewJsonValue(isHealthy))
+
 	return obj
+}
+
+// getHealthState determines the health state based on consecutive failures
+func getHealthState(consecutiveFailures, maxFailures int64) string {
+	threshold := maxFailures / 2 // yellow threshold at 50% of max
+	if consecutiveFailures == 0 {
+		return "GREEN"
+	} else if consecutiveFailures <= threshold {
+		return "YELLOW"
+	} else if consecutiveFailures < maxFailures {
+		return "YELLOW"
+	}
+	return "RED"
 }
