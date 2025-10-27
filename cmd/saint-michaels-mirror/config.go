@@ -10,6 +10,7 @@ package main
 import (
 	"flag"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -73,7 +74,7 @@ func LoadConfig() *Config {
 
 	// Broadcast settings
 	envMaxPublishRelays := os.Getenv("MAX_PUBLISH_RELAYS")
-	maxPublishRelaysVal := 10
+	maxPublishRelaysVal := 50
 	if envMaxPublishRelays != "" {
 		if v, err := strconv.Atoi(envMaxPublishRelays); err == nil {
 			maxPublishRelaysVal = v
@@ -82,7 +83,7 @@ func LoadConfig() *Config {
 	maxPublishRelays := flag.Int("max-publish-relays", maxPublishRelaysVal, "maximum number of top relays to use for publishing events (env: MAX_PUBLISH_RELAYS)")
 
 	envBroadcastWorkers := os.Getenv("BROADCAST_WORKERS")
-	broadcastWorkersVal := 5
+	broadcastWorkersVal := runtime.NumCPU() * 2
 	if envBroadcastWorkers != "" {
 		if v, err := strconv.Atoi(envBroadcastWorkers); err == nil {
 			broadcastWorkersVal = v

@@ -291,6 +291,12 @@ func main() {
 		bs.GetBroadcastSystem().DiscoverFromSeeds(ctx, cfg.BroadcastSeedRelays)
 		bs.GetBroadcastSystem().MarkInitialized()
 
+		// Add mandatory relays to the manager for tracking
+		if len(cfg.BroadcastMandatoryRelays) > 0 {
+			logging.Info("Adding %d mandatory relays to manager for tracking...", len(cfg.BroadcastMandatoryRelays))
+			bs.GetBroadcastSystem().AddMandatoryRelays(cfg.BroadcastMandatoryRelays)
+		}
+
 		logging.Info("broadcaststore initialized with %d seed relays", len(cfg.BroadcastSeedRelays))
 
 		// Register broadcaststore stats provider
