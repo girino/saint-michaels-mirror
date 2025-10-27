@@ -17,10 +17,9 @@ import (
 
 // Config holds runtime configuration coming from environment and CLI flags.
 type Config struct {
-	Addr           string
-	PublishRemotes []string
-	QueryRemotes   []string
-	Verbose        string
+	Addr         string
+	QueryRemotes []string
+	Verbose      string
 
 	RelayServiceURL  string
 	RelayName        string
@@ -45,21 +44,15 @@ func LoadConfig() *Config {
 	if envAddr == "" {
 		envAddr = ":3337"
 	}
-	envRemotes := os.Getenv("PUBLISH_REMOTES")
 	envQueryRemotes := os.Getenv("QUERY_REMOTES")
 	envVerbose := os.Getenv("VERBOSE")
 
 	addr := flag.String("addr", envAddr, "address to listen on")
-	remotes := flag.String("remotes", envRemotes, "comma-separated list of remote relay URLs to forward events to (env: PUBLISH_REMOTES)")
 	queryRemotes := flag.String("query-remotes", envQueryRemotes, "comma-separated list of remote relay URLs to use for queries/subscriptions (env: QUERY_REMOTES)")
 	verbose := flag.String("verbose", envVerbose, "verbose logging control: '1'/'true' for all, 'relaystore' for module, 'relaystore.QueryEvents,mirror' for specific methods (env: VERBOSE)")
 	flag.Parse()
 
-	pub := []string{}
 	qry := []string{}
-	if *remotes != "" {
-		pub = strings.Split(*remotes, ",")
-	}
 	if *queryRemotes != "" {
 		qry = strings.Split(*queryRemotes, ",")
 	}
@@ -91,10 +84,9 @@ func LoadConfig() *Config {
 	}
 
 	cfg := &Config{
-		Addr:           *addr,
-		PublishRemotes: pub,
-		QueryRemotes:   qry,
-		Verbose:        *verbose,
+		Addr:         *addr,
+		QueryRemotes: qry,
+		Verbose:      *verbose,
 
 		RelayServiceURL:  os.Getenv("RELAY_SERVICE_URL"),
 		RelayName:        os.Getenv("RELAY_NAME"),

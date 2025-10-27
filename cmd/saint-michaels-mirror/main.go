@@ -137,42 +137,34 @@ func main() {
 		}
 	}
 
-	// Decode nsec to hex if needed
-	decodedSec := sec
+	// Derive relay pubkey if not already set
 	if sec != "" {
-		// try nip19 decode first
 		if strings.HasPrefix(sec, "nsec") {
-			if pfx, val, err := nip19.Decode(sec); err == nil && pfx == "nsec" {
+			// Decode nsec
+			if _, val, err := nip19.Decode(sec); err == nil {
 				if s, ok := val.(string); ok {
-					// s should be hex private key - use it directly
-					decodedSec = s
 					// derive pubkey
-					if pk, err := nostr.GetPublicKey(s); err == nil {
-						if r.Info.PubKey == "" {
-							r.Info.PubKey = pk
-						}
+					if pk, err := nostr.GetPublicKey(s); err == nil && r.Info.PubKey == "" {
+						r.Info.PubKey = pk
 					}
 				}
 			}
 		} else {
 			// assume it's hex
 			if _, err := hex.DecodeString(sec); err == nil {
-				decodedSec = sec
-				if pk, err := nostr.GetPublicKey(sec); err == nil {
-					if r.Info.PubKey == "" {
-						r.Info.PubKey = pk
-					}
+				if pk, err := nostr.GetPublicKey(sec); err == nil && r.Info.PubKey == "" {
+					r.Info.PubKey = pk
 				}
 			}
 		}
 		// do not log secrets
 	}
 
-	// initialize relaystore with mandatory query relays and optional publish relays
+	// initialize relaystore with mandatory query relays
 	var rs *relaystore.RelayStore
 	if len(cfg.QueryRemotes) > 0 {
 		// Query remotes are mandatory - use them
-		rs = relaystore.New(cfg.QueryRemotes, cfg.PublishRemotes, decodedSec)
+		rs = relaystore.New(cfg.QueryRemotes)
 	} else {
 		// No query remotes provided - fail
 		logging.Fatal("no query remotes provided - relaystore requires query remotes")
