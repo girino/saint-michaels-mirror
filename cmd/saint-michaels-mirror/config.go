@@ -10,10 +10,19 @@ package main
 import (
 	"flag"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/fiatjaf/khatru"
 )
+
+// getEnvOr returns the environment variable value or a default if not set
+func getEnvOr(env, defaultValue string) string {
+	if v := os.Getenv(env); v != "" {
+		return v
+	}
+	return defaultValue
+}
 
 // Config holds runtime configuration coming from environment and CLI flags.
 type Config struct {
@@ -47,9 +56,44 @@ func LoadConfig() *Config {
 	envQueryRemotes := os.Getenv("QUERY_REMOTES")
 	envVerbose := os.Getenv("VERBOSE")
 
-	addr := flag.String("addr", envAddr, "address to listen on")
+	// Basic settings
+	addr := flag.String("addr", envAddr, "address to listen on (env: ADDR)")
 	queryRemotes := flag.String("query-remotes", envQueryRemotes, "comma-separated list of remote relay URLs to use for queries/subscriptions (env: QUERY_REMOTES)")
 	verbose := flag.String("verbose", envVerbose, "verbose logging control: '1'/'true' for all, 'relaystore' for module, 'relaystore.QueryEvents,mirror' for specific methods (env: VERBOSE)")
+
+	// Relay identity settings
+	relayServiceURL := flag.String("relay-service-url", os.Getenv("RELAY_SERVICE_URL"), "service URL for relay (env: RELAY_SERVICE_URL)")
+	relayName := flag.String("relay-name", os.Getenv("RELAY_NAME"), "relay name (env: RELAY_NAME)")
+	relayDescription := flag.String("relay-description", os.Getenv("RELAY_DESCRIPTION"), "relay description (env: RELAY_DESCRIPTION)")
+	relayContact := flag.String("relay-contact", os.Getenv("RELAY_CONTACT"), "relay contact (env: RELAY_CONTACT)")
+	relaySecKey := flag.String("relay-seckey", os.Getenv("RELAY_SECKEY"), "relay secret key (env: RELAY_SECKEY)")
+	relayPubKey := flag.String("relay-pubkey", os.Getenv("RELAY_PUBKEY"), "relay public key (env: RELAY_PUBKEY)")
+	relayIcon := flag.String("relay-icon", os.Getenv("RELAY_ICON"), "relay icon URL (env: RELAY_ICON)")
+	relayBanner := flag.String("relay-banner", os.Getenv("RELAY_BANNER"), "relay banner URL (env: RELAY_BANNER)")
+
+	// Broadcast settings
+	envBroadcastTopN := os.Getenv("BROADCAST_TOP_N")
+	broadcastTopNVal := 10
+	if envBroadcastTopN != "" {
+		if v, err := strconv.Atoi(envBroadcastTopN); err == nil {
+			broadcastTopNVal = v
+		}
+	}
+	broadcastTopN := flag.Int("broadcast-top-n", broadcastTopNVal, "number of top relays to use for broadcasting (env: BROADCAST_TOP_N)")
+
+	envBroadcastWorkers := os.Getenv("BROADCAST_WORKERS")
+	broadcastWorkersVal := 5
+	if envBroadcastWorkers != "" {
+		if v, err := strconv.Atoi(envBroadcastWorkers); err == nil {
+			broadcastWorkersVal = v
+		}
+	}
+	broadcastWorkers := flag.Int("broadcast-workers", broadcastWorkersVal, "number of worker goroutines for broadcasting (env: BROADCAST_WORKERS)")
+
+	broadcastCacheTTL := flag.String("broadcast-cache-ttl", getEnvOr("BROADCAST_CACHE_TTL", "1h"), "cache TTL for broadcast events (env: BROADCAST_CACHE_TTL)")
+	broadcastSeedRelays := flag.String("broadcast-seed-relays", os.Getenv("BROADCAST_SEED_RELAYS"), "comma-separated list of seed relays for broadcast discovery (env: BROADCAST_SEED_RELAYS)")
+	broadcastMandatoryRelays := flag.String("broadcast-mandatory-relays", os.Getenv("BROADCAST_MANDATORY_RELAYS"), "comma-separated list of mandatory relays for broadcasting (env: BROADCAST_MANDATORY_RELAYS)")
+
 	flag.Parse()
 
 	qry := []string{}
@@ -57,30 +101,15 @@ func LoadConfig() *Config {
 		qry = strings.Split(*queryRemotes, ",")
 	}
 
-	// Parse broadcast settings
-	broadcastTopN := 10
-	if os.Getenv("BROADCAST_TOP_N") != "" {
-		broadcastTopN = 10 // default
+	// Parse broadcast relay lists
+	broadcastSeedList := []string{}
+	if *broadcastSeedRelays != "" {
+		broadcastSeedList = strings.Split(*broadcastSeedRelays, ",")
 	}
 
-	broadcastWorkers := 5
-	if os.Getenv("BROADCAST_WORKERS") != "" {
-		broadcastWorkers = 5 // default
-	}
-
-	broadcastCacheTTL := "1h"
-	if os.Getenv("BROADCAST_CACHE_TTL") != "" {
-		broadcastCacheTTL = os.Getenv("BROADCAST_CACHE_TTL")
-	}
-
-	broadcastSeedRelays := []string{}
-	if os.Getenv("BROADCAST_SEED_RELAYS") != "" {
-		broadcastSeedRelays = strings.Split(os.Getenv("BROADCAST_SEED_RELAYS"), ",")
-	}
-
-	broadcastMandatoryRelays := []string{}
-	if os.Getenv("BROADCAST_MANDATORY_RELAYS") != "" {
-		broadcastMandatoryRelays = strings.Split(os.Getenv("BROADCAST_MANDATORY_RELAYS"), ",")
+	broadcastMandatoryList := []string{}
+	if *broadcastMandatoryRelays != "" {
+		broadcastMandatoryList = strings.Split(*broadcastMandatoryRelays, ",")
 	}
 
 	cfg := &Config{
@@ -88,20 +117,20 @@ func LoadConfig() *Config {
 		QueryRemotes: qry,
 		Verbose:      *verbose,
 
-		RelayServiceURL:  os.Getenv("RELAY_SERVICE_URL"),
-		RelayName:        os.Getenv("RELAY_NAME"),
-		RelayDescription: os.Getenv("RELAY_DESCRIPTION"),
-		RelayContact:     os.Getenv("RELAY_CONTACT"),
-		RelaySecKey:      os.Getenv("RELAY_SECKEY"),
-		RelayPubKey:      os.Getenv("RELAY_PUBKEY"),
-		RelayIcon:        os.Getenv("RELAY_ICON"),
-		RelayBanner:      os.Getenv("RELAY_BANNER"),
+		RelayServiceURL:  *relayServiceURL,
+		RelayName:        *relayName,
+		RelayDescription: *relayDescription,
+		RelayContact:     *relayContact,
+		RelaySecKey:      *relaySecKey,
+		RelayPubKey:      *relayPubKey,
+		RelayIcon:        *relayIcon,
+		RelayBanner:      *relayBanner,
 
-		BroadcastTopN:            broadcastTopN,
-		BroadcastWorkers:         broadcastWorkers,
-		BroadcastCacheTTL:        broadcastCacheTTL,
-		BroadcastSeedRelays:      broadcastSeedRelays,
-		BroadcastMandatoryRelays: broadcastMandatoryRelays,
+		BroadcastTopN:            *broadcastTopN,
+		BroadcastWorkers:         *broadcastWorkers,
+		BroadcastCacheTTL:        *broadcastCacheTTL,
+		BroadcastSeedRelays:      broadcastSeedList,
+		BroadcastMandatoryRelays: broadcastMandatoryList,
 	}
 
 	return cfg
