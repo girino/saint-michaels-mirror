@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/fiatjaf/khatru"
 )
@@ -46,6 +47,7 @@ type Config struct {
 	BroadcastCacheTTL        string
 	BroadcastSeedRelays      []string
 	BroadcastMandatoryRelays []string
+	BroadcastRefreshInterval time.Duration
 }
 
 // LoadConfig reads environment variables and flags. Flags override env values.
@@ -95,6 +97,15 @@ func LoadConfig() *Config {
 	broadcastSeedRelays := flag.String("broadcast-seed-relays", os.Getenv("BROADCAST_SEED_RELAYS"), "comma-separated list of seed relays for broadcast discovery (env: BROADCAST_SEED_RELAYS)")
 	broadcastMandatoryRelays := flag.String("broadcast-mandatory-relays", os.Getenv("BROADCAST_MANDATORY_RELAYS"), "comma-separated list of mandatory relays for broadcasting (env: BROADCAST_MANDATORY_RELAYS)")
 
+	// Parse refresh interval
+	envRefreshInterval := getEnvOr("BROADCAST_REFRESH_INTERVAL", "24h")
+	refreshIntervalVal, err := time.ParseDuration(envRefreshInterval)
+	if err != nil {
+		// Default to 24 hours if parsing fails
+		refreshIntervalVal = 24 * time.Hour
+	}
+	broadcastRefreshInterval := flag.Duration("broadcast-refresh-interval", refreshIntervalVal, "interval for periodic relay discovery refresh (env: BROADCAST_REFRESH_INTERVAL)")
+
 	flag.Parse()
 
 	qry := []string{}
@@ -132,6 +143,7 @@ func LoadConfig() *Config {
 		BroadcastCacheTTL:        *broadcastCacheTTL,
 		BroadcastSeedRelays:      broadcastSeedList,
 		BroadcastMandatoryRelays: broadcastMandatoryList,
+		BroadcastRefreshInterval: *broadcastRefreshInterval,
 	}
 
 	return cfg

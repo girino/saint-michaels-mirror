@@ -301,6 +301,10 @@ func main() {
 
 		// Register broadcaststore stats provider
 		stats.GetCollector().RegisterProvider(bs)
+
+		// Start periodic refresh
+		logging.Info("Starting periodic refresh background task...")
+		go startPeriodicRefresh(ctx, cfg, bs.GetBroadcastSystem())
 	}
 
 	// hook store functions into relay
@@ -651,6 +655,32 @@ func main() {
 	logging.Info("Starting %s on %s", ProjectName, cfg.Addr)
 	if err := r.Start(host, port); err != nil {
 		logging.Fatal("relay exited: %v", err)
+	}
+}
+
+func startPeriodicRefresh(ctx context.Context, cfg *Config, broadcastSystem *broadcast.BroadcastSystem) {
+	ticker := time.NewTicker(cfg.BroadcastRefreshInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			logging.Debug("")
+			logging.Debug("==============================================================")
+			logging.Info("Starting periodic relay refresh...")
+			logging.Debug("==============================================================")
+
+			broadcastSystem.DiscoverFromSeeds(ctx, cfg.BroadcastSeedRelays)
+
+			topRelays := broadcastSystem.GetTopRelays()
+			logging.Info("Refresh complete: %d top relays from %d total relays", len(topRelays), broadcastSystem.GetRelayCount())
+			logging.Debug("==============================================================")
+			logging.Debug("")
+
+		case <-ctx.Done():
+			logging.Debug("Periodic refresh stopped")
+			return
+		}
 	}
 }
 

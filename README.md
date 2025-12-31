@@ -95,6 +95,8 @@ BROADCAST_MANDATORY_RELAYS=wss://my-essential-relay.com
 MAX_PUBLISH_RELAYS=50
 # Worker count (default: 2 × CPU cores, auto-detect)
 BROADCAST_WORKERS=10
+# Periodic refresh interval for relay discovery (default: 24h)
+BROADCAST_REFRESH_INTERVAL=24h
 
 # Optional: Server settings
 ADDR=:3337
@@ -119,6 +121,7 @@ COMPOSE_RELAY_PORT=3337
 | `BROADCAST_MANDATORY_RELAYS` | ❌ | Relays that always receive broadcasts | - |
 | `MAX_PUBLISH_RELAYS` | ❌ | Max top relays to publish to | `50` |
 | `BROADCAST_WORKERS` | ❌ | Number of broadcast workers | `2 × CPU cores` |
+| `BROADCAST_REFRESH_INTERVAL` | ❌ | Interval for periodic relay discovery refresh | `24h` |
 | `RELAY_CONTACT` | ❌ | Contact npub or email | - |
 | `RELAY_SERVICE_URL` | ❌ | Public URL of your relay | - |
 | `RELAY_ICON` | ❌ | Path to relay icon | - |
