@@ -115,6 +115,7 @@ RELAY_SECKEY=nsec1your-relay-secret-key-here
 # Optional: Docker settings
 PROD_IMAGE=ghcr.io/girino/saint-michaels-mirror:latest
 COMPOSE_RELAY_PORT=3337
+# WEBHOOK_URL=https://discord.com/api/webhooks/xxx/yyy
 ```
 
 ### Configuration Variables
@@ -138,6 +139,7 @@ COMPOSE_RELAY_PORT=3337
 | `ADDR` | ❌ | Address to listen on | `:3337` |
 | `VERBOSE` | ❌ | Enable verbose logging (1/true/all for all, module names for specific modules, comma-separated for multiple) | `0` |
 | `PROD_IMAGE` | ❌ | Docker image for compose | `latest` |
+| `WEBHOOK_URL` | ❌ | Autoheal webhook for container restart notifications; empty disables | - |
 
 ## 🔐 Authentication & Mirroring Features
 

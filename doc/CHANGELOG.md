@@ -9,6 +9,7 @@ Instruction for AI agents editing this file: prioritize human-friendly, user-fac
 
 ### 🐳 Deployment
 - **Local Compose file**: `docker-compose.yml` is no longer tracked. Copy `docker-compose.prod.yml` and edit the copy for host-specific ports, binds, and image tags.
+- **Autoheal webhook**: Autoheal posts restart notifications to `WEBHOOK_URL` from `.env` when set.
 
 ## v1.4.0 — 2025-10-27
 
