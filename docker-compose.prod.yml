@@ -13,6 +13,7 @@ version: '3.8'
 
 services:
   relay:
+    build: .
     image: "${PROD_IMAGE:-ghcr.io/girino/saint-michaels-mirror/saint-michaels-mirror:latest}"
     restart: unless-stopped
     env_file: .env
@@ -20,7 +21,7 @@ services:
       # Container listens internally on 3337 (ADDR)
       ADDR: ":3337"
     ports:
-      - "${COMPOSE_RELAY_PORT:-3337}:3337" # host:container
+      - "127.0.0.1:${COMPOSE_RELAY_PORT:-3337}:3337" # localhost only; public via nginx/Cloudflare
     networks:
       - proxy_net
     healthcheck:
@@ -28,7 +29,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 300s
 
   tor:
     # Tor hidden service image
