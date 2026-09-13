@@ -64,14 +64,15 @@ tar -xzf saint-michaels-mirror-{{VERSION}}-complete.tar.gz
 cd saint-michaels-mirror-{{VERSION}}
 
 # Copy and configure environment
-cp .env.example .env
-# Edit .env with your configuration
+cp example.env .env
+cp docker-compose.prod.yml docker-compose.yml
+# Edit .env and docker-compose.yml with your configuration
 
 # (Optional) Use specific release version instead of latest
 echo "PROD_IMAGE={{REGISTRY}}/{{IMAGE_NAME}}:{{VERSION}}" >> .env
 
 # Deploy with Docker Compose
-docker compose -f docker-compose.prod.yml up -d
+docker compose up -d
 ```
 
 

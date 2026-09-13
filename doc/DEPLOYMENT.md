@@ -23,12 +23,16 @@ This guide provides comprehensive deployment instructions for Espelho de São Mi
 2. **Configure your relay:**
    ```bash
    cp example.env .env
-   nano .env  # Edit with your configuration
+   cp docker-compose.prod.yml docker-compose.yml
+   nano .env                  # Edit with your configuration
+   nano docker-compose.yml    # Edit ports, binds, image tags as needed
    ```
+
+   `docker-compose.yml` is local and not tracked in git. Keep `docker-compose.prod.yml` as the upstream template.
 
 3. **Deploy:**
    ```bash
-   docker compose -f docker-compose.prod.yml up -d
+   docker compose up -d
    ```
 
 ### Option 2: Standalone Binary
@@ -199,7 +203,7 @@ sudo logrotate -f /etc/logrotate.conf
 
 1. **Configuration backup:**
    ```bash
-   tar -czf relay-config-backup-$(date +%Y%m%d).tar.gz .env docker-compose.prod.yml
+   tar -czf relay-config-backup-$(date +%Y%m%d).tar.gz .env docker-compose.yml docker-compose.prod.yml
    ```
 
 2. **No persistent database:**

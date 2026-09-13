@@ -24,6 +24,10 @@ Thumbs.db
 # Environment files
 .env
 
+# Local Docker Compose override (copy from docker-compose.prod.yml)
+docker-compose.yml
+docker-compose.yaml
+
 # Compiled binary
 /saint-michaels-mirror
 /announcements/

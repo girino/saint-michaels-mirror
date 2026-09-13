@@ -240,6 +240,23 @@ func main() {
 		}
 	}
 
+	whitelist, err := ParsePubkeyWhitelist(cfg.AllowedPubkeys)
+	if err != nil {
+		logging.Fatal("invalid ALLOWED_NPUBS: %v", err)
+	}
+	if whitelist.Enabled() {
+		logging.Info("pubkey whitelist enabled: %d npub(s); NIP-42 AUTH required on connect", whitelist.Len())
+		r.OnConnect = append(r.OnConnect, whitelist.RequestAuthOnConnect)
+		r.RejectFilter = append(r.RejectFilter, whitelist.RejectFilter)
+		r.RejectCountFilter = append(r.RejectCountFilter, whitelist.RejectCountFilter)
+		r.RejectEvent = append(r.RejectEvent, whitelist.RejectEvent)
+		if r.Info.Limitation == nil {
+			r.Info.Limitation = &nip11.RelayLimitationDocument{}
+		}
+		r.Info.Limitation.AuthRequired = true
+		r.Info.Limitation.RestrictedWrites = true
+	}
+
 	// Apply custom connection and filter policies for upstream relay protection
 	filterIpRateLimiter := policies.FilterIPRateLimiter(20, time.Minute, 100)
 	r.RejectFilter = append(r.RejectFilter,

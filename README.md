@@ -15,6 +15,7 @@
 - **🔄 Event Aggregation**: Forwards published events to multiple remote relays
 - **🔍 Query Unification**: Queries multiple relays and merges results for clients
 - **🔐 Authentication Passthrough**: Automatically authenticates with upstream relays using configured relay key
+- **🪪 Pubkey Whitelist**: Optional NIP-42 access list — only configured npubs can query or publish through this relay
 - **📡 Event Mirroring**: Continuously mirrors events from query relays to provide comprehensive event coverage
 - **⚠️ Structured Error Handling**: Passes through machine-readable error prefixes from upstream relays
 - **📊 Real-time Monitoring**: Live statistics and health monitoring dashboard
@@ -35,10 +36,12 @@ cd saint-michaels-mirror
 
 # Configure your relay
 cp example.env .env
-# Edit .env with your settings
+cp docker-compose.prod.yml docker-compose.yml
+# Edit .env and docker-compose.yml with your settings
+# (ports, binds, image tags — docker-compose.yml is local and not committed)
 
 # Deploy with Docker Compose
-docker compose -f docker-compose.prod.yml up -d
+docker compose up -d
 ```
 
 ### Option 2: Docker Run
@@ -105,9 +108,14 @@ VERBOSE=0
 # Optional: Authentication (for upstream relays)
 RELAY_SECKEY=nsec1your-relay-secret-key-here
 
+# Optional: Client access whitelist (NIP-42)
+# Comma-separated npubs or 64-char hex pubkeys. Empty = open to all clients.
+# ALLOWED_NPUBS=npub1abc...,npub1def...
+
 # Optional: Docker settings
 PROD_IMAGE=ghcr.io/girino/saint-michaels-mirror:latest
 COMPOSE_RELAY_PORT=3337
+# WEBHOOK_URL=https://discord.com/api/webhooks/xxx/yyy
 ```
 
 ### Configuration Variables
@@ -127,9 +135,11 @@ COMPOSE_RELAY_PORT=3337
 | `RELAY_ICON` | ❌ | Path to relay icon | - |
 | `RELAY_BANNER` | ❌ | Path to relay banner | - |
 | `RELAY_SECKEY` | ❌ | Relay secret key (hex or nsec) for authentication | - |
+| `ALLOWED_NPUBS` | ❌ | Comma-separated npubs (or hex pubkeys) allowed to access this relay; empty disables the whitelist | - |
 | `ADDR` | ❌ | Address to listen on | `:3337` |
 | `VERBOSE` | ❌ | Enable verbose logging (1/true/all for all, module names for specific modules, comma-separated for multiple) | `0` |
 | `PROD_IMAGE` | ❌ | Docker image for compose | `latest` |
+| `WEBHOOK_URL` | ❌ | Autoheal webhook for container restart notifications; empty disables | - |
 
 ## 🔐 Authentication & Mirroring Features
 
@@ -141,6 +151,16 @@ The relay automatically authenticates with upstream relays when required using t
 - **nsec Bech32**: `nsec1abc123...` (bech32 encoded secret key)
 
 The relay automatically detects and decodes nsec keys to hex format for authentication, ensuring compatibility with both formats.
+
+### Client Access Whitelist
+Set `ALLOWED_NPUBS` (or `--allowed-npubs`) to a comma-separated list of npubs or 64-character hex pubkeys. When that list is non-empty:
+
+- Clients receive a NIP-42 `AUTH` challenge immediately on connect
+- `REQ`, `COUNT`, and `EVENT` wait briefly for that AUTH, then reject if the client never authenticates as a listed pubkey
+- Unauthenticated clients get `auth-required:`; authenticated but unlisted pubkeys get `restricted:`
+- NIP-11 advertises `limitation.auth_required` and `limitation.restricted_writes`
+
+Leave `ALLOWED_NPUBS` empty to keep the relay open. The HTTP UI, NIP-11 document, `/api/v1/health`, and `/api/v1/stats` stay public so healthchecks keep working. Event mirroring from `QUERY_REMOTES` is unchanged — the whitelist only gates client access to this instance.
 
 ### Event Mirroring
 The relay continuously mirrors events from query relays using a "since now" filter, providing comprehensive event coverage. Mirrored events are injected into the local relay via `khatru.BroadcastEvent()` and counted in statistics.
