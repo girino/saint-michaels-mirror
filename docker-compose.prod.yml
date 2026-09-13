@@ -1,6 +1,10 @@
 version: '3.8'
 
-# Production compose: uses a published image for the relay and runs a Tor service
+# Canonical compose template (tracked in git).
+# Copy this file for local/production edits — docker-compose.yml is gitignored:
+#   cp docker-compose.prod.yml docker-compose.yml
+# Then edit docker-compose.yml (ports, binds, image tags, extra services).
+#
 # Notes:
 # - Set PROD_IMAGE to your registry image for a specific version (e.g. ghcr.io/girino/saint-michaels-mirror:1.0.0-rc2)
 # - Defaults to 'latest' tag if PROD_IMAGE is not set

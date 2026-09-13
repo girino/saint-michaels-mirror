@@ -36,10 +36,12 @@ cd saint-michaels-mirror
 
 # Configure your relay
 cp example.env .env
-# Edit .env with your settings
+cp docker-compose.prod.yml docker-compose.yml
+# Edit .env and docker-compose.yml with your settings
+# (ports, binds, image tags — docker-compose.yml is local and not committed)
 
 # Deploy with Docker Compose
-docker compose -f docker-compose.prod.yml up -d
+docker compose up -d
 ```
 
 ### Option 2: Docker Run

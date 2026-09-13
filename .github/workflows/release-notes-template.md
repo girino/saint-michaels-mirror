@@ -100,8 +100,9 @@ cd saint-michaels-mirror-{{VERSION}}
 
 # Configure and deploy
 cp example.env .env
-# Edit .env with your configuration
-docker compose -f docker-compose.prod.yml up -d
+cp docker-compose.prod.yml docker-compose.yml
+# Edit .env and docker-compose.yml with your configuration
+docker compose up -d
 ```
 
 ### **Standalone Binary**
