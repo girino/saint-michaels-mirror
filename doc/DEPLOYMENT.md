@@ -32,8 +32,17 @@ This guide provides comprehensive deployment instructions for Espelho de São Mi
 
 3. **Deploy:**
    ```bash
-   docker compose up -d
+   docker compose up -d --build
    ```
+
+   HTTP is not listening until query-remote/broadcast discovery finishes (often 2–5 minutes). `curl` against the published port before that yields `Empty reply` / `Connection reset`. Wait until health is up:
+
+   ```bash
+   curl -fsS http://127.0.0.1:3337/api/v1/live
+   curl -fsS http://127.0.0.1:3337/api/v1/health
+   ```
+
+   Compose `healthcheck.start_period` is 600s so autoheal does not restart during that window. Set `WEBHOOK_URL` in `.env` for Discord notices; `scripts/notify-restart.sh` is mounted into autoheal and posts the last Docker health output plus recent health/ERROR logs after a restart.
 
 ### Option 2: Standalone Binary
 
@@ -182,9 +191,14 @@ sudo systemctl status saint-michaels-mirror
 docker ps
 docker logs saint-michaels-mirror
 
-# Check relay health endpoint
-curl http://localhost:3337/api/v1/health
+# Process up (no stats)
+curl -fsS http://localhost:3337/api/v1/live
+
+# Subsystem health — HTTP 503 means RED (Docker/autoheal treat this as unhealthy)
+curl -fsS http://localhost:3337/api/v1/health
 ```
+
+Goroutine YELLOW starts at 30k, RED at 100k. Heartbeat lines (`health heartbeat: goroutines=…`) continue even if `/health` is stuck. Slow websocket writes log `slow websocket write: dur=… ip=… pubkey=…`; a write stuck >3s disconnects **that** client only.
 
 ### Log Management
 
@@ -261,12 +275,16 @@ sysctl -p
    - Verify WebSocket headers are set correctly
    - Check firewall settings
 
-2. **High memory usage:**
-   - Monitor goroutine counts in `/stats`
-   - Check for memory leaks
-   - Consider restarting the service periodically
+2. **High memory usage / goroutine RED:**
+   - Check `health heartbeat:` and `slow websocket write` / `client_skips` in logs
+   - `/stats` → `app.goroutines` and `mirror.dropped_events`
+   - Autoheal will restart if `/api/v1/health` stays 503 (RED)
 
-3. **Connection timeouts:**
+3. **`curl: (52) Empty reply from server`:**
+   - Too early: wait for `/api/v1/live` (init not finished)
+   - After listen: historically a panic in `/health` (typed-nil broadcaststore). Check `docker logs` for panic.
+
+4. **Connection timeouts:**
    - Increase nginx proxy timeouts
    - Check network connectivity to remote relays
    - Verify remote relay availability
@@ -277,11 +295,15 @@ sysctl -p
 # Check relay statistics
 curl http://localhost:3337/api/v1/stats | jq
 
-# Check relay health
-curl http://localhost:3337/api/v1/health | jq
+# Check relay health (503 = RED)
+curl -fsS http://localhost:3337/api/v1/health | jq
+curl -fsS http://localhost:3337/api/v1/live | jq
 
 # Test WebSocket connection
 wscat -c ws://localhost:3337
+
+# Local fan-out + outbound broadcast (see doc/NAK_BROADCAST_TESTS.md)
+./scripts/nak-broadcast-tests.sh
 
 # Test with nak (fiatjaf's Nostr client)
 nak req -k 1 -limit 5 ws://localhost:3337

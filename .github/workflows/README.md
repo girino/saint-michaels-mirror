@@ -21,8 +21,10 @@ This directory contains GitHub Actions workflows for automated CI/CD, testing, a
 - **Actions**:
   - Go build and test
   - Multi-architecture Docker image build test (AMD64, ARM64)
-  - Docker container run test for both architectures
-  - Health check validation
+  - Docker container run (native arch)
+  - Wait for `/api/v1/live` (HTTP starts only after init; an early curl is empty-reply)
+  - Then `/api/v1/health` (must not panic if broadcaststore is unset — CI has no seed relays)
+  - Optional `nak req` against the container
 
 ### 3. Release (`release.yml`)
 - **Trigger**: Push tags matching `v*` pattern

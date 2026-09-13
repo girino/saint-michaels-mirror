@@ -12,6 +12,10 @@ Instruction for AI agents editing this file: prioritize human-friendly, user-fac
 - **Connection cap**: reject new websockets above 256 concurrent.
 - **Goroutine dump**: when count hits YELLOW/RED, log a full stack (rate-limited) so the next autoheal Discord message can show the leak site.
 
+### 📚 Docs
+- **Humans**: README mirroring/health/autoheal/testing; [DEPLOYMENT.md](DEPLOYMENT.md) wait-for-HTTP and empty-reply troubleshooting.
+- **Agents**: [AGENTS.md](../AGENTS.md) (pitfalls, health vs live, no `BroadcastEvent` / `GetListeningFilters`). [CLAUDE.md](../CLAUDE.md) points there.
+
 ### 🧪 Broadcast checks
 - **Reproducible nak tests**: `scripts/nak-broadcast-tests.sh` (see `doc/NAK_BROADCAST_TESTS.md`) checks local fan-out (3 readers / 2 writers) and outbound presence on mandatory + top-N relays.
 

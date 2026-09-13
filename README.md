@@ -16,7 +16,7 @@
 - **🔍 Query Unification**: Queries multiple relays and merges results for clients
 - **🔐 Authentication Passthrough**: Automatically authenticates with upstream relays using configured relay key
 - **🪪 Pubkey Whitelist**: Optional NIP-42 access list — only configured npubs can query or publish through this relay
-- **📡 Event Mirroring**: Continuously mirrors events from query relays to provide comprehensive event coverage
+- **📡 Event Mirroring**: Mirrors events from query relays only while clients are subscribed; each websocket has its own write queue so a slow reader cannot stall everyone
 - **⚠️ Structured Error Handling**: Passes through machine-readable error prefixes from upstream relays
 - **📊 Real-time Monitoring**: Live statistics and health monitoring dashboard
 - **🐳 Docker Ready**: Complete Docker Compose setup for easy deployment
@@ -116,6 +116,7 @@ RELAY_SECKEY=nsec1your-relay-secret-key-here
 PROD_IMAGE=ghcr.io/girino/saint-michaels-mirror:latest
 COMPOSE_RELAY_PORT=3337
 # WEBHOOK_URL=https://discord.com/api/webhooks/xxx/yyy
+# Autoheal also runs scripts/notify-restart.sh after a restart (health log + recent errors).
 ```
 
 ### Configuration Variables
@@ -139,7 +140,7 @@ COMPOSE_RELAY_PORT=3337
 | `ADDR` | ❌ | Address to listen on | `:3337` |
 | `VERBOSE` | ❌ | Enable verbose logging (1/true/all for all, module names for specific modules, comma-separated for multiple) | `0` |
 | `PROD_IMAGE` | ❌ | Docker image for compose | `latest` |
-| `WEBHOOK_URL` | ❌ | Autoheal webhook for container restart notifications; empty disables | - |
+| `WEBHOOK_URL` | ❌ | Autoheal webhook for container restart notifications; empty disables. Compose also posts a detailed dump via `scripts/notify-restart.sh` | - |
 
 ## 🔐 Authentication & Mirroring Features
 
@@ -158,18 +159,20 @@ Set `ALLOWED_NPUBS` (or `--allowed-npubs`) to a comma-separated list of npubs or
 - Clients receive a NIP-42 `AUTH` challenge immediately on connect
 - `REQ`, `COUNT`, and `EVENT` wait briefly for that AUTH, then reject if the client never authenticates as a listed pubkey
 - Unauthenticated clients get `auth-required:`; authenticated but unlisted pubkeys get `restricted:`
+- Non-members and clients that never AUTH within 8s are **disconnected** (idle crawlers otherwise pile up goroutines)
+- Concurrent websockets are capped at 256
 - NIP-11 advertises `limitation.auth_required` and `limitation.restricted_writes`
 
 Leave `ALLOWED_NPUBS` empty to keep the relay open. The HTTP UI, NIP-11 document, `/api/v1/health`, and `/api/v1/stats` stay public so healthchecks keep working. Event mirroring from `QUERY_REMOTES` is unchanged — the whitelist only gates client access to this instance.
 
 ### Event Mirroring
-The relay continuously mirrors events from query relays using a "since now" filter, providing comprehensive event coverage. Mirrored events are injected into the local relay via `khatru.BroadcastEvent()` and counted in statistics.
+Events from `QUERY_REMOTES` are pulled with a "since now" filter **only while at least one client has an open REQ**. They are pushed to subscribers through a per-connection write queue (not khatru `BroadcastEvent`). A slow websocket drops only its own events; others keep flowing. Writes slower than 200ms are logged; a write stuck more than 3s disconnects that client.
 
-**Mirroring Benefits:**
-- **Complete Coverage**: Ensures all events from query relays are available locally
-- **Real-time Updates**: Events are mirrored immediately as they arrive
-- **Deduplication**: Automatic deduplication prevents duplicate events
-- **Statistics Tracking**: Mirroring activity is tracked in the stats endpoint
+**Mirroring notes:**
+- **On demand**: no firehose when nobody is listening
+- **Isolation**: slow consumers cannot stall the mirror or leak goroutines
+- **Drops**: ingest queue 4096; overflow is counted (`dropped_events` / `client_skips` in stats)
+- **Outbound publish** to seed/mandatory/top relays is separate (`broadcaststore`). Local `successes++` means queued, not “seen on a remote” — confirm remotes with `nak` (see [doc/NAK_BROADCAST_TESTS.md](doc/NAK_BROADCAST_TESTS.md))
 
 ### Structured Error Handling
 When all publish attempts fail, the relay returns machine-readable error prefixes from upstream relays (NIP-01 standard), including: `duplicate`, `pow`, `blocked`, `rate-limited`, `invalid`, `restricted`, `mute`, `error`, and `auth-required`.
@@ -183,7 +186,7 @@ Once running, visit your relay in a web browser:
 - **Main Page** (`/`): Relay information and NIP-11 metadata
 - **Statistics** (`/stats`): Real-time performance metrics and counters
 - **Health** (`/health`): Health status and failure tracking
-- **API** (`/api/v1/stats`, `/api/v1/health`): JSON endpoints for monitoring
+- **API**: `GET /api/v1/live` (process up), `GET /api/v1/health` (subsystem colors; **503** if RED), `GET /api/v1/stats` (full metrics)
 
 ### Features
 
@@ -201,7 +204,7 @@ The relay monitors its own health and reports status:
 
 - **🟢 GREEN**: No failures, all operations successful
 - **🟡 YELLOW**: Some failures detected, but below threshold
-- **🔴 RED**: Critical failures, relay marked as unhealthy
+- **🔴 RED**: Critical failures. Docker healthcheck uses `curl -f` on `/api/v1/health`, so RED is **HTTP 503** and autoheal may restart the container. Goroutine count YELLOW ≥ 30k / RED ≥ 100k. HTTP is not listening until init finishes (often several minutes); compose `start_period` is 600s.
 
 ### Metrics Available
 
@@ -252,12 +255,17 @@ go build -o bin/saint-michaels-mirror ./cmd/saint-michaels-mirror
 ### Testing
 
 ```bash
-# Run tests
-go test -v ./...
+# Unit tests
+go test -v ./cmd/saint-michaels-mirror/
+
+# Live fan-out + outbound broadcast (needs a running relay and nak)
+./scripts/nak-broadcast-tests.sh
 
 # Run with verbose logging
 VERBOSE=1 ./bin/saint-michaels-mirror
 ```
+
+After `docker compose up -d --build relay`, wait until `curl -fsS http://127.0.0.1:3337/api/v1/health` succeeds before curling or running nak tests. See [doc/NAK_BROADCAST_TESTS.md](doc/NAK_BROADCAST_TESTS.md).
 
 ## 🔍 Verbose Logging & Debugging
 
@@ -278,7 +286,7 @@ VERBOSE=main
 
 # Enable specific methods
 VERBOSE=relaystore.QueryEvents
-VERBOSE=mirror.StartMirroring
+VERBOSE=mirror
 
 # Enable multiple modules/methods
 VERBOSE=relaystore.QueryEvents,mirror,main
@@ -319,7 +327,7 @@ Verbose logs use structured format with module.method prefixes:
 ```
 [DEBUG] relaystore.QueryEvents: attempting semaphore acquisition (wait count: 5)
 [DEBUG] relaystore.QueryEvents: acquired semaphore for FetchMany (remaining slots: 19)
-[INFO] mirror.StartMirroring: starting mirroring for relay wss://relay.example.com
+[INFO] dropping mirror started: 16 query remotes, queue=4096 (async per-client writes; subscribe only while clients are listening)
 [WARN] main: connection rate limited for IP 192.168.1.100
 ```
 
@@ -386,6 +394,8 @@ Complete documentation is available in the [doc/](doc/) directory:
 
 - **[CHANGELOG.md](doc/CHANGELOG.md)** - Version history and release notes
 - **[DEPLOYMENT.md](doc/DEPLOYMENT.md)** - Deployment guide and configuration
+- **[NAK_BROADCAST_TESTS.md](doc/NAK_BROADCAST_TESTS.md)** - Reproducible `nak` checks for local fan-out and outbound relays
+- **[AGENTS.md](AGENTS.md)** - Operational notes for coding agents
 - **[MIGRATION_GUIDE_v1.3.0.md](doc/MIGRATION_GUIDE_v1.3.0.md)** - Step-by-step migration instructions
 - **[RELEASE_NOTES_v1.3.0.md](doc/RELEASE_NOTES_v1.3.0.md)** - Comprehensive release documentation
 - **[VERBOSE_LOGGING_QUICK_REFERENCE.md](doc/VERBOSE_LOGGING_QUICK_REFERENCE.md)** - Quick reference for verbose logging

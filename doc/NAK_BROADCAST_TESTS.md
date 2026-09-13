@@ -1,5 +1,7 @@
 # Nak broadcast tests (for agents)
 
+Canonical procedure: also listed from [AGENTS.md](../AGENTS.md). Humans: [README.md](../README.md) Testing section.
+
 Reproducible checks that Espelho de São Miguel (1) fans events out to local
 websocket subscribers without going through khatru `BroadcastEvent`, and (2)
 publishes those events to other relays.
