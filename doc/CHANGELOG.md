@@ -12,6 +12,9 @@ Instruction for AI agents editing this file: prioritize human-friendly, user-fac
 - **Connection cap**: reject new websockets above 256 concurrent.
 - **Goroutine dump**: when count hits YELLOW/RED, log a full stack (rate-limited) so the next autoheal Discord message can show the leak site.
 
+### 🧪 Broadcast checks
+- **Reproducible nak tests**: `scripts/nak-broadcast-tests.sh` (see `doc/NAK_BROADCAST_TESTS.md`) checks local fan-out (3 readers / 2 writers) and outbound presence on mandatory + top-N relays.
+
 ### 🩺 Health diagnostics
 - **Richer unhealthy-restart trail**: `/api/v1/health` now logs each Docker probe (status, subsystem colors, consecutive failures, duration). Heartbeats every 30s record goroutine/memory even if the health handler is stuck. If stats collection hangs, the process dumps goroutines and returns `503` with `reason=stats_timeout:<component>`.
 - **Health probe no longer calls GetAllStats()**: Docker healthchecks read relay/mirror/broadcast/app stats directly so a stuck broadcast-manager lock cannot freeze the probe. `/api/v1/stats` still uses the collector, with a timeout and the same goroutine dump.
