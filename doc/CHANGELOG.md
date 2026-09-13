@@ -4,6 +4,21 @@ Instruction for AI agents editing this file: prioritize human-friendly, user-fac
 
 ## Unreleased
 
+### 🐛 Goroutine leak (unhealthy restarts)
+- **Cause**: Docker 503s were `goroutines=RED` (~100k). Query/mirror/broadcast stayed GREEN. go-nostr `dispatchEvent` spawns a goroutine per mirrored EVENT on an unbuffered channel; a slow `BroadcastEvent` (idle crawler websockets) made that grow without bound. Idle clients that never AUTH also left 3 goroutines each.
+- **Dropping mirror**: ingest queue of 4096; firehose runs only while a client has an open REQ. Excess events are dropped instead of blocking go-nostr. Drop logs are rate-limited to once per 10s. Listener count is tracked locally — khatru `GetListeningFilters()` races and panics (`index out of range`) when REQs come in concurrently. Ingest/broadcast panics are recovered so they cannot take down the process.
+- **Slow consumers isolated**: mirrored events are no longer sent via khatru `BroadcastEvent` (sequential `WriteJSON` with no deadline — one stalled socket blocked everyone). Each websocket has its own bounded queue and writer goroutine. A slow client drops only its own events; others keep flowing. Writes slower than 200ms are logged (`ip`, `pubkey`, duration); writes stuck >3s disconnect **that** socket only.
+- **Disconnect non-members**: whitelist AUTH timeout (8s) or non-whitelisted AUTH closes the websocket.
+- **Connection cap**: reject new websockets above 256 concurrent.
+- **Goroutine dump**: when count hits YELLOW/RED, log a full stack (rate-limited) so the next autoheal Discord message can show the leak site.
+
+### 🩺 Health diagnostics
+- **Richer unhealthy-restart trail**: `/api/v1/health` now logs each Docker probe (status, subsystem colors, consecutive failures, duration). Heartbeats every 30s record goroutine/memory even if the health handler is stuck. If stats collection hangs, the process dumps goroutines and returns `503` with `reason=stats_timeout:<component>`.
+- **Health probe no longer calls GetAllStats()**: Docker healthchecks read relay/mirror/broadcast/app stats directly so a stuck broadcast-manager lock cannot freeze the probe. `/api/v1/stats` still uses the collector, with a timeout and the same goroutine dump.
+- **Liveness endpoint**: `GET /api/v1/live` returns `200` without touching stats (process-up check).
+- **Autoheal restart details**: `POST_RESTART_SCRIPT` dumps the last Docker healthcheck output and recent health/error logs to `WEBHOOK_URL` after a restart.
+- **Longer start period**: Compose healthcheck `start_period` is 600s so the initial broadcast discovery (which can take ~4–5 minutes with thousands of relays) is not marked unhealthy.
+
 ### 🪪 Access Control
 - **Pubkey whitelist**: Optional `ALLOWED_NPUBS` (or `--allowed-npubs`) list of npubs or hex pubkeys. When set, clients must authenticate with NIP-42 as a listed pubkey before they can query or publish. Unlisted or unauthenticated clients are rejected with `auth-required:` / `restricted:`. NIP-11 advertises `auth_required` and `restricted_writes`. HTTP health/stats endpoints stay public.
 

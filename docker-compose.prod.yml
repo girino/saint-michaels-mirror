@@ -24,11 +24,15 @@ services:
     networks:
       - proxy_net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3337/api/v1/health"]
+      # -f: fail on HTTP 4xx/5xx (RED health returns 503)
+      # -sS: silent progress, still print errors (stored in docker health log)
+      # --max-time: stay under the Docker timeout so a hung probe is visible
+      test: ["CMD", "curl", "-fsS", "--max-time", "8", "http://localhost:3337/api/v1/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      # Broadcast discovery + batch health of thousands of relays can take ~5 min
+      start_period: 600s
 
   tor:
     # Tor hidden service image
@@ -66,8 +70,11 @@ services:
       - AUTOHEAL_INTERVAL=30
       # Posted when autoheal restarts a container; set in .env (empty disables)
       - WEBHOOK_URL=${WEBHOOK_URL:-}
+      # Extra Discord/log dump of healthcheck output + recent container logs
+      - POST_RESTART_SCRIPT=/scripts/notify-restart.sh
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./scripts/notify-restart.sh:/scripts/notify-restart.sh:ro
     networks:
       - proxy_net
 

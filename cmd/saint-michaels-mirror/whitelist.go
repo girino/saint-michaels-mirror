@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fasthttp/websocket"
 	"github.com/fiatjaf/khatru"
 	"github.com/girino/nostr-lib/logging"
 	"github.com/nbd-wtf/go-nostr"
@@ -126,8 +127,24 @@ func (w *PubkeyWhitelist) RejectEvent(ctx context.Context, event *nostr.Event) (
 	return w.rejectAuthed(ctx, "event")
 }
 
+// disconnectClient sends a websocket close. Used to drop scanners that never AUTH
+// (they otherwise sit forever: read loop + ping loop + auth waiter = 3 goroutines).
+func disconnectClient(ws *khatru.WebSocket, reason string) {
+	if ws == nil {
+		return
+	}
+	ip := ""
+	if ws.Request != nil {
+		ip = khatru.GetIPFromRequest(ws.Request)
+	}
+	logging.Info("disconnecting client from %s: %s", ip, reason)
+	payload := websocket.FormatCloseMessage(websocket.ClosePolicyViolation, reason)
+	_ = ws.WriteMessage(websocket.CloseMessage, payload)
+}
+
 // RequestAuthOnConnect sends a NIP-42 AUTH challenge as soon as the websocket opens,
 // then logs whether the client completed AUTH as a whitelist member.
+// Non-members and clients that never AUTH are disconnected so they cannot pile up.
 func (w *PubkeyWhitelist) RequestAuthOnConnect(ctx context.Context) {
 	khatru.RequestAuth(ctx)
 	conn := khatru.GetConnection(ctx)
@@ -137,8 +154,11 @@ func (w *PubkeyWhitelist) RequestAuthOnConnect(ctx context.Context) {
 	authedCh := conn.Authed
 	go func() {
 		if authedCh == nil {
+			disconnectClient(conn, whitelistAuthRequiredMsg)
 			return
 		}
+		timer := time.NewTimer(authWaitTimeout)
+		defer timer.Stop()
 		select {
 		case <-ctx.Done():
 			return
@@ -146,9 +166,15 @@ func (w *PubkeyWhitelist) RequestAuthOnConnect(ctx context.Context) {
 			pk := khatru.GetAuthed(ctx)
 			if w.Contains(pk) {
 				logging.Info("whitelist accepted AUTH %s from %s", pk, khatru.GetIP(ctx))
-			} else {
-				logging.Warn("whitelist AUTH from non-member %s from %s", pk, khatru.GetIP(ctx))
+				return
 			}
+			logging.Warn("whitelist AUTH from non-member %s from %s", pk, khatru.GetIP(ctx))
+			disconnectClient(conn, whitelistRestrictedMsg)
+		case <-timer.C:
+			if w.Contains(khatru.GetAuthed(ctx)) {
+				return
+			}
+			disconnectClient(conn, whitelistAuthRequiredMsg)
 		}
 	}()
 }
@@ -183,10 +209,12 @@ func (w *PubkeyWhitelist) waitForAuth(ctx context.Context) bool {
 	if authedCh == nil {
 		return false
 	}
+	timer := time.NewTimer(authWaitTimeout)
+	defer timer.Stop()
 	select {
 	case <-authedCh:
 		return true
-	case <-time.After(authWaitTimeout):
+	case <-timer.C:
 		return false
 	case <-ctx.Done():
 		return false

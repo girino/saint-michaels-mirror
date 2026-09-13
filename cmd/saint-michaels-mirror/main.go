@@ -25,7 +25,6 @@ import (
 	"github.com/girino/nostr-lib/eventstore/relaystore"
 	jsonlib "github.com/girino/nostr-lib/json"
 	"github.com/girino/nostr-lib/logging"
-	"github.com/girino/nostr-lib/mirror"
 	"github.com/girino/nostr-lib/stats"
 	"github.com/nbd-wtf/go-nostr"
 	nip11 "github.com/nbd-wtf/go-nostr/nip11"
@@ -173,17 +172,10 @@ func main() {
 		logging.Fatal("initializing relaystore: %v", err)
 	}
 
-	// initialize mirror manager with query remotes or fail
-	var mm *mirror.MirrorManager
-	if len(cfg.QueryRemotes) > 0 {
-		mm = mirror.NewMirrorManager(cfg.QueryRemotes)
-		if err := mm.Init(); err != nil {
-			logging.Fatal("initializing mirror manager: %v", err)
-		}
-	} else {
-		// No query remotes provided - fail
-		logging.Fatal("no query remotes provided - mirror manager requires query remotes")
-	}
+	// Dropping ingest mirror is started later (after the khatru relay is wired).
+	// The old nostr-lib MirrorManager.StartMirroring() consumed the firehose
+	// synchronously via BroadcastEvent; slow websockets made go-nostr spawn
+	// unbounded dispatchEvent goroutines until health went RED.
 
 	// Ensure some canonical NIP-11 fields are set on the relay Info. ApplyToRelay
 	// sets most fields from config; here we only set safe defaults when empty
@@ -256,6 +248,15 @@ func main() {
 		r.Info.Limitation.AuthRequired = true
 		r.Info.Limitation.RestrictedWrites = true
 	}
+
+	// Drop idle/dead sockets faster; khatru WriteJSON has no write deadline.
+	r.PingPeriod = 20 * time.Second
+	r.PongWait = 40 * time.Second
+
+	wsLim := &wsLimiter{}
+	r.RejectConnection = append(r.RejectConnection, wsLim.reject)
+	r.OnConnect = append(r.OnConnect, wsLim.onConnect)
+	r.OnDisconnect = append(r.OnDisconnect, wsLim.onDisconnect)
 
 	// Apply custom connection and filter policies for upstream relay protection
 	filterIpRateLimiter := policies.FilterIPRateLimiter(20, time.Minute, 100)
@@ -335,188 +336,27 @@ func main() {
 	r.QueryEvents = append(r.QueryEvents, rs.QueryEvents)
 	r.CountEvents = append(r.CountEvents, rs.CountEvents)
 
-	// start event mirroring from query relays
-	if err := mm.StartMirroring(r); err != nil {
-		logging.Fatal("[mirror] failed to start mirroring: %v", err)
-	}
-	defer mm.StopMirroring()
+	mirrorCtx, mirrorCancel := context.WithCancel(context.Background())
+	defer mirrorCancel()
+	dropMirror := startDroppingMirror(mirrorCtx, cfg.QueryRemotes, r)
 
 	// register stats providers with global collector
 	stats.GetCollector().RegisterProvider(rs)
-	if mm != nil {
-		stats.GetCollector().RegisterProvider(mm)
-	}
-	stats.GetCollector().RegisterProvider(&appStatsProvider{
+	stats.GetCollector().RegisterProvider(dropMirror)
+	appProvider := &appStatsProvider{
 		startTime: startTime,
 		version:   Version,
-	})
+	}
+	stats.GetCollector().RegisterProvider(appProvider)
+	startHealthDiagnostics()
 
 	// expose stats endpoint using the relay's router
 	mux := r.Router()
-	mux.HandleFunc("/api/v1/stats", func(w http.ResponseWriter, req *http.Request) {
-		// Get stats from global collector
-		allStats := stats.GetCollector().GetAllStats()
-
-		// Marshal to JSON
-		jsonData, err := jsonlib.MarshalIndent(allStats, "", "  ")
-		if err != nil {
-			http.Error(w, "failed to encode stats", http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(jsonData)
-	})
-
-	// expose health endpoint for docker healthchecks
-	mux.HandleFunc("/api/v1/health", func(w http.ResponseWriter, req *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-
-		// Get stats from global collector
-		allStats := stats.GetCollector().GetAllStats()
-		relayStatsEntity, _ := allStats.Get("relay")
-		mirrorStatsEntity, _ := allStats.Get("mirror")
-		broadcastStatsEntity, _ := allStats.Get("broadcaststore")
-		appStatsEntity, _ := allStats.Get("app")
-		relayStatsObj, _ := relayStatsEntity.(*jsonlib.JsonObject)
-		mirrorStatsObj, _ := mirrorStatsEntity.(*jsonlib.JsonObject)
-		broadcastStatsObj, _ := broadcastStatsEntity.(*jsonlib.JsonObject)
-		appStatsObj, _ := appStatsEntity.(*jsonlib.JsonObject)
-
-		// Extract health states
-		var mainHealthState string
-		var publishHealthState string
-		var queryHealthState string
-		var mirrorHealthState string
-		var broadcastHealthState string
-		var goroutineHealthState string
-		var consecutivePublishFailures int64
-		var consecutiveQueryFailures int64
-		var consecutiveMirrorFailures int64
-		var consecutiveBroadcastFailures int64
-
-		if relayStatsObj != nil {
-			if mainHealthStateVal, ok := relayStatsObj.Get("main_health_state"); ok {
-				if val, ok := mainHealthStateVal.(*jsonlib.JsonValue); ok {
-					mainHealthState, _ = val.GetString()
-				}
-			}
-			if state, ok := relayStatsObj.Get("publish_health_state"); ok {
-				if val, ok := state.(*jsonlib.JsonValue); ok {
-					publishHealthState, _ = val.GetString()
-				}
-			}
-			if state, ok := relayStatsObj.Get("query_health_state"); ok {
-				if val, ok := state.(*jsonlib.JsonValue); ok {
-					queryHealthState, _ = val.GetString()
-				}
-			}
-			if failures, ok := relayStatsObj.Get("consecutive_publish_failures"); ok {
-				if val, ok := failures.(*jsonlib.JsonValue); ok {
-					consecutivePublishFailures, _ = val.GetInt()
-				}
-			}
-			if failures, ok := relayStatsObj.Get("consecutive_query_failures"); ok {
-				if val, ok := failures.(*jsonlib.JsonValue); ok {
-					consecutiveQueryFailures, _ = val.GetInt()
-				}
-			}
-		}
-
-		if mirrorStatsObj != nil {
-			if state, ok := mirrorStatsObj.Get("mirror_health_state"); ok {
-				if val, ok := state.(*jsonlib.JsonValue); ok {
-					mirrorHealthState, _ = val.GetString()
-				}
-			}
-			if failures, ok := mirrorStatsObj.Get("consecutive_mirror_failures"); ok {
-				if val, ok := failures.(*jsonlib.JsonValue); ok {
-					consecutiveMirrorFailures, _ = val.GetInt()
-				}
-			}
-			// Use mirror health state if it's worse
-			if mirrorHealthState == "RED" || (mirrorHealthState == "YELLOW" && mainHealthState == "GREEN") {
-				mainHealthState = mirrorHealthState
-			}
-		}
-
-		if broadcastStatsObj != nil {
-			if state, ok := broadcastStatsObj.Get("health_state"); ok {
-				if val, ok := state.(*jsonlib.JsonValue); ok {
-					broadcastHealthState, _ = val.GetString()
-				}
-			}
-			if failures, ok := broadcastStatsObj.Get("consecutive_failures"); ok {
-				if val, ok := failures.(*jsonlib.JsonValue); ok {
-					consecutiveBroadcastFailures, _ = val.GetInt()
-				}
-			}
-			// Use broadcast health state if it's worse
-			if broadcastHealthState == "RED" || (broadcastHealthState == "YELLOW" && mainHealthState == "GREEN") {
-				mainHealthState = broadcastHealthState
-			}
-		}
-
-		if appStatsObj != nil {
-			if goroutinesObj, ok := appStatsObj.Get("goroutines"); ok {
-				if goroutinesVal, ok := goroutinesObj.(*jsonlib.JsonObject); ok {
-					if state, ok := goroutinesVal.Get("health_state"); ok {
-						if val, ok := state.(*jsonlib.JsonValue); ok {
-							goroutineHealthState, _ = val.GetString()
-							// Use goroutine health state if it's worse
-							if goroutineHealthState == "RED" || (goroutineHealthState == "YELLOW" && mainHealthState == "GREEN") {
-								mainHealthState = goroutineHealthState
-							}
-						}
-					}
-				}
-			}
-		}
-
-		// Determine HTTP status
-		var httpStatus int
-		var status string
-		switch mainHealthState {
-		case "GREEN":
-			httpStatus = http.StatusOK
-			status = "healthy"
-		case "YELLOW":
-			httpStatus = http.StatusOK
-			status = "degraded"
-		case "RED":
-			httpStatus = http.StatusServiceUnavailable
-			status = "unhealthy"
-		default:
-			httpStatus = http.StatusInternalServerError
-			status = "unknown"
-		}
-
-		// Build health response as JsonObject
-		health := jsonlib.NewJsonObject()
-		health.Set("status", jsonlib.NewJsonValue(status))
-		health.Set("service", jsonlib.NewJsonValue(r.Info.Name))
-		health.Set("version", jsonlib.NewJsonValue(Version))
-		health.Set("main_health_state", jsonlib.NewJsonValue(mainHealthState))
-		health.Set("publish_health_state", jsonlib.NewJsonValue(publishHealthState))
-		health.Set("query_health_state", jsonlib.NewJsonValue(queryHealthState))
-		health.Set("mirror_health_state", jsonlib.NewJsonValue(mirrorHealthState))
-		health.Set("broadcast_health_state", jsonlib.NewJsonValue(broadcastHealthState))
-		health.Set("goroutine_health_state", jsonlib.NewJsonValue(goroutineHealthState))
-		health.Set("consecutive_publish_failures", jsonlib.NewJsonValue(consecutivePublishFailures))
-		health.Set("consecutive_query_failures", jsonlib.NewJsonValue(consecutiveQueryFailures))
-		health.Set("consecutive_mirror_failures", jsonlib.NewJsonValue(consecutiveMirrorFailures))
-		health.Set("consecutive_broadcast_failures", jsonlib.NewJsonValue(consecutiveBroadcastFailures))
-
-		// Marshal to JSON
-		jsonData, err := jsonlib.MarshalIndent(health, "", "  ")
-		if err != nil {
-			http.Error(w, "failed to encode health status", http.StatusInternalServerError)
-			return
-		}
-
-		w.WriteHeader(httpStatus)
-		w.Write(jsonData)
-	})
+	mux.HandleFunc("/api/v1/stats", handleStatsAPI())
+	// Docker healthchecks hit /api/v1/health. Collect component stats directly
+	// (not GetAllStats) so a stuck broadcast manager cannot freeze the probe.
+	mux.HandleFunc("/api/v1/health", handleHealthAPI(r.Info.Name, rs, dropMirror, bs, appProvider))
+	mux.HandleFunc("/api/v1/live", handleLiveAPI())
 
 	// Define view model struct for templates
 	type ViewModel struct {
