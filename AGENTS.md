@@ -18,7 +18,7 @@ Default local websocket/HTTP: `ws://127.0.0.1:3337` / `http://127.0.0.1:3337`.
 
 HTTP **does not listen** until query-remote/broadcast init finishes (often 2–5 min with thousands of relays). Docker publishes the port immediately → early `curl` is `Empty reply` / `Connection reset`. Compose `start_period` is **600s**. CI waits on `/live` then `/health` (`.github/workflows/test.yml`).
 
-Do not use khatru `GetListeningFilters()` — it races (`index out of range`) when REQs mutate `listeners`. Listener count is `clientHub` / `subTracker` (allowed REQ increment, disconnect decrement).
+Do not use khatru `GetListeningFilters()` — it races (`index out of range`) when REQs mutate `listeners`. Listener count is `fanout.Hub.ListenerCount()`.
 
 ## Mirror and writes
 
@@ -26,10 +26,9 @@ Do **not** send live events through `khatru.Relay.BroadcastEvent` / `notifyListe
 
 Current path:
 
-- Ingest from `QUERY_REMOTES` only while some client has an open REQ (`dropping_mirror.go`). Queue 4096; drop with rate-limited WARN if full.
-- Fan-out via `clientHub` (`client_fanout.go`): per-websocket queue (64) + writer goroutine. Slow client drops only its own events (`client_skips`). Write >200ms logged; stuck >3s disconnects **that** socket.
-- `PreventBroadcast` skips khatru sync writes for sockets we already write. Client `EVENT` also fans out from `OnEventSaved`.
-- Max **256** concurrent websockets (`connections.go`).
+- Ingest and fan-out come from `github.com/girino/nostr-lib/mirror` + `fanout` (PR branch `fix/getstats-deadlock-and-mirror-backpressure` until that lands on lib `main`).
+- Wire with `hub := fanout.Attach(relay)` then `mm.StartMirroringHub(relay, hub)`. Do not call khatru `BroadcastEvent` for live events.
+- Max **256** concurrent websockets (`fanout.WithMaxConnections`).
 - Whitelist (`ALLOWED_NPUBS`): AUTH on connect; non-member or 8s timeout **closes** the websocket.
 
 Proof an event reached a **remote** relay is `nak req --id <id>` on that URL, not `broadcaststore.successes++` (that only means queued locally).
@@ -52,4 +51,4 @@ Nak procedure, env vars, pass/fail, known dest misses: [doc/NAK_BROADCAST_TESTS.
 - Typed-nil `*T` inside a `statsProvider` interface is not `p == nil`; `GetStats()` panics and HTTP closes the conn (`curl 52`). `isNilStatsProvider` handles this.
 - Panic in a `go func() { ch <- p.GetStats() }` kills the **process** unless recovered (health path recovers).
 - Do not log every dropped mirror event (resets a “first drop” counter and livelocks ingest).
-- `VERBOSE=mirror.StartMirroring` is stale; mirroring is `dropping_mirror` / `client_fanout`, not nostr-lib `MirrorManager.StartMirroring`.
+- Use `StartMirroringHub`, not `StartMirroring` (the latter still uses khatru sync `BroadcastEvent`).

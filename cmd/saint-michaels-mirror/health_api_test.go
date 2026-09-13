@@ -171,9 +171,9 @@ func TestHandleHealthAPI(t *testing.T) {
 }
 
 func TestCollectHealthSnapshotTypedNilProvider(t *testing.T) {
-	var rs *droppingMirror
-	var bs *droppingMirror
-	mm := &droppingMirror{hub: newClientHub()}
+	var rs *fakeProvider
+	var bs *fakeProvider
+	mm := &fakeProvider{obj: obj("mirror_health_state", HealthGreen)}
 	app := &appStatsProvider{startTime: time.Now(), version: "test"}
 	snap := collectHealthSnapshot(rs, mm, bs, app)
 	if snap.HTTPStatus == 0 {

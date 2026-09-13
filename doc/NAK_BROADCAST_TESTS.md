@@ -59,7 +59,7 @@ processes publish in parallel with that tag.
 
 Pass = each reader JSONL contains both contents (`…-A` and `…-B`).
 
-This path is `OnEventSaved` → `clientHub.fanout` → per-websocket write queue,
+This path is `OnEventSaved` → `fanout.Hub.BroadcastEvent` → per-websocket write queue,
 **not** khatru `notifyListeners`/`BroadcastEvent` (`PreventBroadcast` skips those
 sockets). If this phase fails, local isolation is broken.
 

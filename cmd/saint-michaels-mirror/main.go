@@ -23,8 +23,10 @@ import (
 	"github.com/girino/nostr-lib/broadcast"
 	"github.com/girino/nostr-lib/eventstore/broadcaststore"
 	"github.com/girino/nostr-lib/eventstore/relaystore"
+	"github.com/girino/nostr-lib/fanout"
 	jsonlib "github.com/girino/nostr-lib/json"
 	"github.com/girino/nostr-lib/logging"
+	"github.com/girino/nostr-lib/mirror"
 	"github.com/girino/nostr-lib/stats"
 	"github.com/nbd-wtf/go-nostr"
 	nip11 "github.com/nbd-wtf/go-nostr/nip11"
@@ -172,11 +174,6 @@ func main() {
 		logging.Fatal("initializing relaystore: %v", err)
 	}
 
-	// Dropping ingest mirror is started later (after the khatru relay is wired).
-	// The old nostr-lib MirrorManager.StartMirroring() consumed the firehose
-	// synchronously via BroadcastEvent; slow websockets made go-nostr spawn
-	// unbounded dispatchEvent goroutines until health went RED.
-
 	// Ensure some canonical NIP-11 fields are set on the relay Info. ApplyToRelay
 	// sets most fields from config; here we only set safe defaults when empty
 	// and make sure SupportedNIPs includes 11 so khatru will serve NIP-11.
@@ -252,11 +249,6 @@ func main() {
 	// Drop idle/dead sockets faster; khatru WriteJSON has no write deadline.
 	r.PingPeriod = 20 * time.Second
 	r.PongWait = 40 * time.Second
-
-	wsLim := &wsLimiter{}
-	r.RejectConnection = append(r.RejectConnection, wsLim.reject)
-	r.OnConnect = append(r.OnConnect, wsLim.onConnect)
-	r.OnDisconnect = append(r.OnDisconnect, wsLim.onDisconnect)
 
 	// Apply custom connection and filter policies for upstream relay protection
 	filterIpRateLimiter := policies.FilterIPRateLimiter(20, time.Minute, 100)
@@ -336,13 +328,23 @@ func main() {
 	r.QueryEvents = append(r.QueryEvents, rs.QueryEvents)
 	r.CountEvents = append(r.CountEvents, rs.CountEvents)
 
-	mirrorCtx, mirrorCancel := context.WithCancel(context.Background())
-	defer mirrorCancel()
-	dropMirror := startDroppingMirror(mirrorCtx, cfg.QueryRemotes, r)
+	// After whitelist + rate limiters so REQ tracking only sees allowed filters.
+	hub := fanout.Attach(r, fanout.WithMaxConnections(256))
+	defer hub.Close()
+
+	mm := mirror.NewMirrorManager(cfg.QueryRemotes)
+	if err := mm.Init(); err != nil {
+		logging.Fatal("initializing mirror manager: %v", err)
+	}
+	if err := mm.StartMirroringHub(r, hub); err != nil {
+		logging.Fatal("starting mirror: %v", err)
+	}
+	defer mm.StopMirroring()
 
 	// register stats providers with global collector
 	stats.GetCollector().RegisterProvider(rs)
-	stats.GetCollector().RegisterProvider(dropMirror)
+	stats.GetCollector().RegisterProvider(mm)
+	stats.GetCollector().RegisterProvider(hub)
 	appProvider := &appStatsProvider{
 		startTime: startTime,
 		version:   Version,
@@ -355,7 +357,7 @@ func main() {
 	mux.HandleFunc("/api/v1/stats", handleStatsAPI())
 	// Docker healthchecks hit /api/v1/health. Collect component stats directly
 	// (not GetAllStats) so a stuck broadcast manager cannot freeze the probe.
-	mux.HandleFunc("/api/v1/health", handleHealthAPI(r.Info.Name, rs, dropMirror, bs, appProvider))
+	mux.HandleFunc("/api/v1/health", handleHealthAPI(r.Info.Name, rs, mm, bs, appProvider))
 	mux.HandleFunc("/api/v1/live", handleLiveAPI())
 
 	// Define view model struct for templates
