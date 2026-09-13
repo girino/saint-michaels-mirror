@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync/atomic"
@@ -117,13 +118,32 @@ func asObject(entity jsonlib.JsonEntity) *jsonlib.JsonObject {
 	return obj
 }
 
-func getStatsWithTimeout(p statsProvider, timeout time.Duration) (jsonlib.JsonEntity, time.Duration, error) {
+func isNilStatsProvider(p statsProvider) bool {
 	if p == nil {
+		return true
+	}
+	rv := reflect.ValueOf(p)
+	switch rv.Kind() {
+	case reflect.Ptr, reflect.Interface, reflect.Map, reflect.Slice, reflect.Func, reflect.Chan:
+		return rv.IsNil()
+	default:
+		return false
+	}
+}
+
+func getStatsWithTimeout(p statsProvider, timeout time.Duration) (jsonlib.JsonEntity, time.Duration, error) {
+	if isNilStatsProvider(p) {
 		return nil, 0, nil
 	}
 	start := time.Now()
 	ch := make(chan jsonlib.JsonEntity, 1)
 	go func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				logging.Error("GetStats panic: %v", rec)
+				ch <- nil
+			}
+		}()
 		ch <- p.GetStats()
 	}()
 	select {
@@ -333,6 +353,12 @@ func startHealthDiagnostics() {
 
 func handleHealthAPI(serviceName string, rs, mm, bs, app statsProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				logging.Error("health handler panic: %v", rec)
+				http.Error(w, "health handler panic", http.StatusInternalServerError)
+			}
+		}()
 		w.Header().Set("Content-Type", "application/json")
 		snap := collectHealthSnapshot(rs, mm, bs, app)
 		logHealthSnapshot(snap, req)

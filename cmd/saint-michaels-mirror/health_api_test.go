@@ -170,6 +170,24 @@ func TestHandleHealthAPI(t *testing.T) {
 	}
 }
 
+func TestCollectHealthSnapshotTypedNilProvider(t *testing.T) {
+	var rs *droppingMirror
+	var bs *droppingMirror
+	mm := &droppingMirror{hub: newClientHub()}
+	app := &appStatsProvider{startTime: time.Now(), version: "test"}
+	snap := collectHealthSnapshot(rs, mm, bs, app)
+	if snap.HTTPStatus == 0 {
+		t.Fatal("typed-nil stats providers must not panic or skip HTTP status")
+	}
+	handler := handleHealthAPI("test-relay", rs, mm, bs, app)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK && rec.Code != http.StatusServiceUnavailable && rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.Bytes())
+	}
+}
+
 func TestHandleLiveAPI(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/live", nil)
 	rec := httptest.NewRecorder()
