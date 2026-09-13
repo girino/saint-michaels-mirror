@@ -2,6 +2,11 @@
 
 Instruction for AI agents editing this file: prioritize human-friendly, user-facing functionality; de-emphasize CI/CD and infrastructure-only changes.
 
+## Unreleased
+
+### 🪪 Access Control
+- **Pubkey whitelist**: Optional `ALLOWED_NPUBS` (or `--allowed-npubs`) list of npubs or hex pubkeys. When set, clients must authenticate with NIP-42 as a listed pubkey before they can query or publish. Unlisted or unauthenticated clients are rejected with `auth-required:` / `restricted:`. NIP-11 advertises `auth_required` and `restricted_writes`. HTTP health/stats endpoints stay public.
+
 ## v1.4.0 — 2025-10-27
 
 ### 🚀 Performance & Scalability

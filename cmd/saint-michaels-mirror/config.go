@@ -41,6 +41,10 @@ type Config struct {
 	RelayIcon        string
 	RelayBanner      string
 
+	// AllowedPubkeys is the raw ALLOWED_NPUBS value (npub or hex, comma-separated).
+	// Empty means the relay is open to all clients.
+	AllowedPubkeys string
+
 	// Broadcast settings
 	MaxPublishRelays         int
 	BroadcastWorkers         int
@@ -73,6 +77,7 @@ func LoadConfig() *Config {
 	relayPubKey := flag.String("relay-pubkey", os.Getenv("RELAY_PUBKEY"), "relay public key (env: RELAY_PUBKEY)")
 	relayIcon := flag.String("relay-icon", os.Getenv("RELAY_ICON"), "relay icon URL (env: RELAY_ICON)")
 	relayBanner := flag.String("relay-banner", os.Getenv("RELAY_BANNER"), "relay banner URL (env: RELAY_BANNER)")
+	allowedPubkeys := flag.String("allowed-npubs", os.Getenv("ALLOWED_NPUBS"), "comma-separated npub or hex pubkeys allowed to access this relay; empty disables the whitelist (env: ALLOWED_NPUBS)")
 
 	// Broadcast settings
 	envMaxPublishRelays := os.Getenv("MAX_PUBLISH_RELAYS")
@@ -137,6 +142,7 @@ func LoadConfig() *Config {
 		RelayPubKey:      *relayPubKey,
 		RelayIcon:        *relayIcon,
 		RelayBanner:      *relayBanner,
+		AllowedPubkeys:   *allowedPubkeys,
 
 		MaxPublishRelays:         *maxPublishRelays,
 		BroadcastWorkers:         *broadcastWorkers,
