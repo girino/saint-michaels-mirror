@@ -245,8 +245,8 @@ func main() {
 		logging.Fatal("invalid ALLOWED_NPUBS: %v", err)
 	}
 	if whitelist.Enabled() {
-		logging.Info("pubkey whitelist enabled: %d npub(s)", whitelist.Len())
-		r.OnConnect = append(r.OnConnect, khatru.RequestAuth)
+		logging.Info("pubkey whitelist enabled: %d npub(s); NIP-42 AUTH required on connect", whitelist.Len())
+		r.OnConnect = append(r.OnConnect, whitelist.RequestAuthOnConnect)
 		r.RejectFilter = append(r.RejectFilter, whitelist.RejectFilter)
 		r.RejectCountFilter = append(r.RejectCountFilter, whitelist.RejectCountFilter)
 		r.RejectEvent = append(r.RejectEvent, whitelist.RejectEvent)

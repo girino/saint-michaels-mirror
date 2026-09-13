@@ -155,8 +155,8 @@ The relay automatically detects and decodes nsec keys to hex format for authenti
 ### Client Access Whitelist
 Set `ALLOWED_NPUBS` (or `--allowed-npubs`) to a comma-separated list of npubs or 64-character hex pubkeys. When that list is non-empty:
 
-- Clients receive a NIP-42 `AUTH` challenge on connect
-- `REQ`, `COUNT`, and `EVENT` are rejected until the client authenticates as a listed pubkey
+- Clients receive a NIP-42 `AUTH` challenge immediately on connect
+- `REQ`, `COUNT`, and `EVENT` wait briefly for that AUTH, then reject if the client never authenticates as a listed pubkey
 - Unauthenticated clients get `auth-required:`; authenticated but unlisted pubkeys get `restricted:`
 - NIP-11 advertises `limitation.auth_required` and `limitation.restricted_writes`
 

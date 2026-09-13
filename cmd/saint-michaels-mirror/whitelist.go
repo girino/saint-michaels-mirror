@@ -12,12 +12,15 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/fiatjaf/khatru"
 	"github.com/girino/nostr-lib/logging"
 	"github.com/nbd-wtf/go-nostr"
 	nip19 "github.com/nbd-wtf/go-nostr/nip19"
 )
+
+const authWaitTimeout = 8 * time.Second
 
 const (
 	whitelistAuthRequiredMsg = "auth-required: authenticate with a whitelisted npub"
@@ -123,11 +126,69 @@ func (w *PubkeyWhitelist) RejectEvent(ctx context.Context, event *nostr.Event) (
 	return w.rejectAuthed(ctx, "event")
 }
 
+// RequestAuthOnConnect sends a NIP-42 AUTH challenge as soon as the websocket opens,
+// then logs whether the client completed AUTH as a whitelist member.
+func (w *PubkeyWhitelist) RequestAuthOnConnect(ctx context.Context) {
+	khatru.RequestAuth(ctx)
+	conn := khatru.GetConnection(ctx)
+	if conn == nil {
+		return
+	}
+	authedCh := conn.Authed
+	go func() {
+		if authedCh == nil {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-authedCh:
+			pk := khatru.GetAuthed(ctx)
+			if w.Contains(pk) {
+				logging.Info("whitelist accepted AUTH %s from %s", pk, khatru.GetIP(ctx))
+			} else {
+				logging.Warn("whitelist AUTH from non-member %s from %s", pk, khatru.GetIP(ctx))
+			}
+		}
+	}()
+}
+
 func (w *PubkeyWhitelist) rejectAuthed(ctx context.Context, kind string) (reject bool, msg string) {
 	authed := khatru.GetAuthed(ctx)
 	reject, msg = w.checkAccess(authed)
+	if reject && msg == whitelistAuthRequiredMsg {
+		// Client often sends REQ immediately after connect, before finishing AUTH.
+		// Wait for the in-flight NIP-42 handshake instead of closing right away.
+		if waited := w.waitForAuth(ctx); waited {
+			authed = khatru.GetAuthed(ctx)
+			reject, msg = w.checkAccess(authed)
+		}
+	}
 	if reject {
 		logging.Warn("whitelist rejected %s: %s, authed=%s, from=%s", kind, msg, authed, khatru.GetIP(ctx))
 	}
 	return reject, msg
+}
+
+func (w *PubkeyWhitelist) waitForAuth(ctx context.Context) bool {
+	conn := khatru.GetConnection(ctx)
+	if conn == nil {
+		return false
+	}
+	authedCh := conn.Authed
+	if authedCh == nil {
+		khatru.RequestAuth(ctx)
+		authedCh = conn.Authed
+	}
+	if authedCh == nil {
+		return false
+	}
+	select {
+	case <-authedCh:
+		return true
+	case <-time.After(authWaitTimeout):
+		return false
+	case <-ctx.Done():
+		return false
+	}
 }
