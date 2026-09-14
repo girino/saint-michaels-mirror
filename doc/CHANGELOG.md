@@ -12,6 +12,9 @@ Instruction for AI agents editing this file: prioritize human-friendly, user-fac
 - **Connection cap**: reject new websockets above 256 concurrent.
 - **Goroutine dump**: when count hits YELLOW/RED, log a full stack (rate-limited) so the next autoheal Discord message can show the leak site.
 
+### 🩺 Autoheal scope
+- Autoheal watches label `saint-michaels-mirror.autoheal=true` on this compose’s relay and tor only (not host-wide `all`). Container name is `saint-michaels-mirror-autoheal`.
+
 ### 🧪 nostr-lib fanout (this branch)
 - **Uses** `github.com/girino/nostr-lib@1c87b99` (`fix/getstats-deadlock-and-mirror-backpressure`): `fanout.Attach` + `mirror.StartMirroringHub` instead of in-tree dropping_mirror/client_fanout.
 

@@ -35,7 +35,7 @@ Proof an event reached a **remote** relay is `nak req --id <id>` on that URL, no
 
 ## Autoheal
 
-`willfarrell/autoheal` + `WEBHOOK_URL`. After restart, `scripts/notify-restart.sh` posts last Docker health output + recent health/ERROR logs. Mount is in compose. Short autoheal message still fires first.
+`willfarrell/autoheal` watches only containers with `saint-michaels-mirror.autoheal=true` (relay + tor in this compose). Not `AUTOHEAL_CONTAINER_LABEL=all`. After restart, `scripts/notify-restart.sh` posts last Docker health output + recent health/ERROR logs.
 
 ## Tests
 

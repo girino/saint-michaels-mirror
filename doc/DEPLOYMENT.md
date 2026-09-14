@@ -42,7 +42,7 @@ This guide provides comprehensive deployment instructions for Espelho de São Mi
    curl -fsS http://127.0.0.1:3337/api/v1/health
    ```
 
-   Compose `healthcheck.start_period` is 600s so autoheal does not restart during that window. Set `WEBHOOK_URL` in `.env` for Discord notices; `scripts/notify-restart.sh` is mounted into autoheal and posts the last Docker health output plus recent health/ERROR logs after a restart.
+   Compose `healthcheck.start_period` is 600s so autoheal does not restart during that window. Autoheal only watches containers labeled `saint-michaels-mirror.autoheal=true` (relay and tor). Set `WEBHOOK_URL` in `.env` for Discord notices; `scripts/notify-restart.sh` posts the last Docker health output plus recent health/ERROR logs after a restart.
 
 ### Option 2: Standalone Binary
 

@@ -21,6 +21,8 @@ services:
       ADDR: ":3337"
     ports:
       - "${COMPOSE_RELAY_PORT:-3337}:3337" # host:container
+    labels:
+      - "saint-michaels-mirror.autoheal=true"
     networks:
       - proxy_net
     healthcheck:
@@ -49,6 +51,8 @@ services:
     volumes:
       # Persist Tor hidden service keys
       - tor_data:/var/lib/tor/hidden_service/
+    labels:
+      - "saint-michaels-mirror.autoheal=true"
     networks:
       - proxy_net
     healthcheck:
@@ -64,9 +68,10 @@ services:
   autoheal:
     image: willfarrell/autoheal:latest
     restart: unless-stopped
-    container_name: autoheal
+    container_name: saint-michaels-mirror-autoheal
     environment:
-      - AUTOHEAL_CONTAINER_LABEL=all
+      # Only containers in this compose (label below). Not host-wide `all`.
+      - AUTOHEAL_CONTAINER_LABEL=saint-michaels-mirror.autoheal
       - AUTOHEAL_INTERVAL=30
       # Posted when autoheal restarts a container; set in .env (empty disables)
       - WEBHOOK_URL=${WEBHOOK_URL:-}
