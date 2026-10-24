@@ -200,7 +200,13 @@ curl -fsS http://localhost:3337/api/v1/health
 
 Goroutine YELLOW starts at 30k, RED at 100k. Heartbeat lines (`health heartbeat: goroutines=…`) continue even if `/health` is stuck. Slow websocket writes log `slow websocket write: dur=… ip=… pubkey=…`; a write stuck >3s disconnects **that** client only.
 
+When goroutine count hits YELLOW/RED, a stats collection times out, or the health snapshot is degraded, the process can write a full goroutine stacktrace (~2 MB) to the log. This is a debug aid and the main driver of container log growth, so the compose sets `GOROUTINE_DUMP=off` by default. Use `GOROUTINE_DUMP=auto` to tie it to `VERBOSE`, or `GOROUTINE_DUMP=on` to force it while diagnosing a leak.
+
 ### Log Management
+
+The compose sets `json-file` rotation on every service (`max-size`/`max-file`), so
+container logs are capped. Without it, the default `json-file` driver grows
+without bound and can fill the disk (observed: a single 34 GB `json.log`).
 
 ```bash
 # View service logs

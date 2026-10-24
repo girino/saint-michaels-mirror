@@ -13,6 +13,7 @@ import (
 	"html/template"
 	"net"
 	"net/http"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -120,6 +121,12 @@ func main() {
 	//   - VERBOSE=relaystore.QueryEvents,mirror: enable specific method + module
 	//   - VERBOSE=: disable all verbose logging (default)
 	logging.SetVerbose(cfg.Verbose)
+
+	// Control the (potentially multi-MB) goroutine stacktrace dump.
+	//   GOROUTINE_DUMP=auto (default): only when VERBOSE is enabled
+	//   GOROUTINE_DUMP=off           : never (production)
+	//   GOROUTINE_DUMP=on            : always
+	SetGoroutineDumpMode(os.Getenv("GOROUTINE_DUMP"))
 
 	// create a basic khatru relay instance
 	r := khatru.NewRelay()

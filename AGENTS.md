@@ -37,6 +37,8 @@ Proof an event reached a **remote** relay is `nak req --id <id>` on that URL, no
 
 `willfarrell/autoheal` watches only containers with `saint-michaels-mirror.autoheal=true` (relay + tor in this compose). Not `AUTOHEAL_CONTAINER_LABEL=all`. After restart, `scripts/notify-restart.sh` posts last Docker health output + recent health/ERROR logs.
 
+Tor healthcheck is `torsocks wget check.torproject.org` (15s). Timeouts usually mean circuit congestion; autoheal restart is intentional recovery.
+
 ## Tests
 
 ```bash

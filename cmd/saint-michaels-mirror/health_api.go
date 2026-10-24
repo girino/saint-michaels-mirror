@@ -34,7 +34,43 @@ var (
 	lastGoroutineDumpUnix   atomic.Int64
 	lastLoggedHealthState   atomic.Value // string
 	healthHeartbeatInterval = 30 * time.Second
+
+	// goroutineDump controls whether a full goroutine stacktrace is written to
+	// the log by dumpAllGoroutines. The dump is a debug aid and can be several MB
+	// per event; in production it is the main source of log growth.
+	//   auto (default): dump only when VERBOSE logging is enabled
+	//   on/true/1:      always dump (even without VERBOSE)
+	//   off/false/0:    never dump
+	goroutineDump atomic.Value // string
 )
+
+// SetGoroutineDumpMode sets the goroutine dump policy from GOROUTINE_DUMP.
+// It is called once from main() after logging.SetVerbose.
+func SetGoroutineDumpMode(mode string) {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "":
+		goroutineDump.Store("auto")
+	case "on", "true", "1", "yes":
+		goroutineDump.Store("on")
+	case "off", "false", "0", "no":
+		goroutineDump.Store("off")
+	default:
+		goroutineDump.Store("auto")
+	}
+}
+
+// goroutineDumpEnabled reports whether a full goroutine dump should be written.
+func goroutineDumpEnabled() bool {
+	mode, _ := goroutineDump.Load().(string)
+	switch mode {
+	case "on":
+		return true
+	case "off":
+		return false
+	default: // "auto" or unset
+		return logging.Verbose
+	}
+}
 
 type statsProvider interface {
 	GetStats() jsonlib.JsonEntity
@@ -301,6 +337,11 @@ func logHealthSnapshot(s healthSnapshot, req *http.Request) {
 }
 
 func dumpAllGoroutines(reason string) {
+	if !goroutineDumpEnabled() {
+		// Still record that a dump would have happened, without the multi-MB payload.
+		logging.Warn("%s (goroutine dump disabled; set GOROUTINE_DUMP=on or VERBOSE to enable)", reason)
+		return
+	}
 	now := time.Now().Unix()
 	prev := lastGoroutineDumpUnix.Load()
 	if now-prev < int64(goroutineDumpMinInterval.Seconds()) {

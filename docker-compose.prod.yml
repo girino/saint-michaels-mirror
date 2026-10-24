@@ -19,6 +19,10 @@ services:
     environment:
       # Container listens internally on 3337 (ADDR)
       ADDR: ":3337"
+      # Goroutine stacktrace dump (up to ~2 MB/event) is a debug aid only;
+      # it is the main source of container log growth. Default off in prod.
+      # Set GOROUTINE_DUMP=auto to follow VERBOSE, or =on to force the dump.
+      GOROUTINE_DUMP: "${GOROUTINE_DUMP:-off}"
     ports:
       - "${COMPOSE_RELAY_PORT:-3337}:3337" # host:container
     labels:
@@ -35,6 +39,12 @@ services:
       retries: 3
       # Broadcast discovery + batch health of thousands of relays can take ~5 min
       start_period: 600s
+    logging:
+      # Without this, json-file grows unbounded (observed: 34G json.log).
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
 
   tor:
     # Tor hidden service image
@@ -59,11 +69,17 @@ services:
       # Test Tor connectivity by checking Tor Project API
       # 1. Hidden service hostname file exists
       # 2. Test actual Tor connectivity using torsocks + wget
+      # Timeouts here usually mean circuit congestion; autoheal restart recovers.
       test: ["CMD", "sh", "-c", "test -f /var/lib/tor/hidden_service/relay/hostname && torsocks wget -q -O - https://check.torproject.org/api/ip | grep -q '\"IsTor\":true'"]
       interval: 60s
       timeout: 15s
       retries: 3
       start_period: 90s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
 
   autoheal:
     image: willfarrell/autoheal:latest
@@ -82,6 +98,11 @@ services:
       - ./scripts/notify-restart.sh:/scripts/notify-restart.sh:ro
     networks:
       - proxy_net
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   tor_data:

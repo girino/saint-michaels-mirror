@@ -15,6 +15,7 @@ import (
 	"time"
 
 	jsonlib "github.com/girino/nostr-lib/json"
+	"github.com/girino/nostr-lib/logging"
 )
 
 type fakeProvider struct {
@@ -206,5 +207,56 @@ func TestIsDockerHealthcheck(t *testing.T) {
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 	if isDockerHealthcheck(req) {
 		t.Fatal("browser UA should not be treated as docker healthcheck")
+	}
+}
+
+func TestSetGoroutineDumpMode(t *testing.T) {
+	tests := []struct {
+		mode    string
+		verbose bool
+		want    bool
+	}{
+		// Explicit on/off override regardless of verbose state.
+		{"on", false, true},
+		{"true", false, true},
+		{"1", false, true},
+		{"off", true, false},
+		{"false", true, false},
+		{"0", true, false},
+		// auto tracks the verbose flag.
+		{"auto", true, true},
+		{"auto", false, false},
+		{"", true, true},
+		{"", false, false},
+		// Unrecognized values fall back to auto.
+		{"bogus", true, true},
+		{"bogus", false, false},
+	}
+	for _, tc := range tests {
+		origVerbose := logging.Verbose
+		logging.Verbose = tc.verbose
+		SetGoroutineDumpMode(tc.mode)
+		got := goroutineDumpEnabled()
+		logging.Verbose = origVerbose
+		if got != tc.want {
+			t.Errorf("GOROUTINE_DUMP=%q verbose=%v: enabled=%v, want %v",
+				tc.mode, tc.verbose, got, tc.want)
+		}
+	}
+}
+
+func TestDumpAllGoroutinesDisabled(t *testing.T) {
+	origVerbose := logging.Verbose
+	logging.Verbose = false
+	SetGoroutineDumpMode("off")
+	defer func() {
+		logging.Verbose = origVerbose
+		SetGoroutineDumpMode("auto")
+	}()
+
+	// Must not panic or block when disabled; it only records a warning.
+	dumpAllGoroutines("test dump disabled")
+	if goroutineDumpEnabled() {
+		t.Fatal("goroutine dump should be disabled")
 	}
 }
