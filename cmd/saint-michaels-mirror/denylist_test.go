@@ -5,7 +5,11 @@
 // License available at: https://license.girino.org/
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/girino/nostr-lib/broadcast/manager"
+)
 
 func TestDenylistMatch(t *testing.T) {
 	d := NewDenylist("wot.girino.org", "relay.example:443", "wss://prefix.example/sub")
@@ -77,4 +81,28 @@ func TestDenylistEmpty(t *testing.T) {
 	if got := d.Len(); got != 1 {
 		t.Fatalf("Len() = %d, want 1", got)
 	}
+}
+
+func TestPruneDeniedRelays(t *testing.T) {
+	mgr := manager.NewManager(10, 0.9)
+	mgr.AddRelay("wss://wot.girino.org")
+	mgr.AddRelay("wss://wot.girino.org/sierra")
+	mgr.AddRelay("wss://relay.damus.io")
+
+	pruneDeniedRelays(NewDenylist("wot.girino.org"), mgr)
+
+	if got := mgr.GetRelayCount(); got != 1 {
+		t.Fatalf("relay count = %d, want 1", got)
+	}
+	for _, u := range mgr.GetAllRelays() {
+		if u != "wss://relay.damus.io" {
+			t.Fatalf("unexpected relay left in manager: %s", u)
+		}
+	}
+}
+
+func TestPruneDeniedRelaysNilManager(t *testing.T) {
+	// Must not panic when the broadcast store is disabled.
+	pruneDeniedRelays(NewDenylist("wot.girino.org"), nil)
+	pruneDeniedRelays(NewDenylist(), manager.NewManager(10, 0.9))
 }
