@@ -22,6 +22,7 @@ import (
 	"github.com/fiatjaf/khatru"
 	"github.com/fiatjaf/khatru/policies"
 	"github.com/girino/nostr-lib/broadcast"
+	"github.com/girino/nostr-lib/broadcast/manager"
 	"github.com/girino/nostr-lib/eventstore/broadcaststore"
 	"github.com/girino/nostr-lib/eventstore/relaystore"
 	"github.com/girino/nostr-lib/fanout"
@@ -171,6 +172,18 @@ func main() {
 	// Operational goroutine limits: YELLOW warns, RED fails the healthcheck and
 	// triggers an autoheal restart.
 	applyGoroutineThresholdEnv()
+
+	// Never dial ourselves. The denylist combines UPSTREAM_DENYLIST with the
+	// relay's own public hostname, and is applied to every configured list plus
+	// to the dynamically discovered relays (see pruneDeniedRelays).
+	denylist := NewDenylist(cfg.UpstreamDenylist...)
+	denylist.AddSelf(cfg.RelayServiceURL)
+	if !denylist.Empty() {
+		logging.Info("Upstream denylist active: %s", denylist.String())
+		cfg.QueryRemotes = filterAndLog(denylist, "QUERY_REMOTES", cfg.QueryRemotes)
+		cfg.BroadcastSeedRelays = filterAndLog(denylist, "BROADCAST_SEED_RELAYS", cfg.BroadcastSeedRelays)
+		cfg.BroadcastMandatoryRelays = filterAndLog(denylist, "BROADCAST_MANDATORY_RELAYS", cfg.BroadcastMandatoryRelays)
+	}
 
 	// create a basic khatru relay instance
 	r := khatru.NewRelay()
@@ -358,6 +371,10 @@ func main() {
 			bs.GetBroadcastSystem().AddMandatoryRelays(cfg.BroadcastMandatoryRelays)
 		}
 
+		// Discovery can re-add the relay's own hostname from third-party relay
+		// lists; drop it so it is never published to nor health-checked again.
+		pruneDeniedRelays(denylist, bs.GetBroadcastSystem().GetManager())
+
 		logging.Info("broadcaststore initialized with %d seed relays", len(cfg.BroadcastSeedRelays))
 
 		// Register broadcaststore stats provider
@@ -365,7 +382,7 @@ func main() {
 
 		// Start periodic refresh
 		logging.Info("Starting periodic refresh background task...")
-		go startPeriodicRefresh(ctx, cfg, bs.GetBroadcastSystem())
+		go startPeriodicRefresh(ctx, cfg, bs.GetBroadcastSystem(), denylist)
 	}
 
 	// hook store functions into relay
@@ -568,7 +585,7 @@ func main() {
 	}
 }
 
-func startPeriodicRefresh(ctx context.Context, cfg *Config, broadcastSystem *broadcast.BroadcastSystem) {
+func startPeriodicRefresh(ctx context.Context, cfg *Config, broadcastSystem *broadcast.BroadcastSystem, denylist *Denylist) {
 	ticker := time.NewTicker(cfg.BroadcastRefreshInterval)
 	defer ticker.Stop()
 
@@ -581,6 +598,7 @@ func startPeriodicRefresh(ctx context.Context, cfg *Config, broadcastSystem *bro
 			logging.Debug("==============================================================")
 
 			broadcastSystem.DiscoverFromSeeds(ctx, cfg.BroadcastSeedRelays)
+			pruneDeniedRelays(denylist, broadcastSystem.GetManager())
 
 			topRelays := broadcastSystem.GetTopRelays()
 			logging.Info("Refresh complete: %d top relays from %d total relays", len(topRelays), broadcastSystem.GetRelayCount())
@@ -591,6 +609,25 @@ func startPeriodicRefresh(ctx context.Context, cfg *Config, broadcastSystem *bro
 			logging.Debug("Periodic refresh stopped")
 			return
 		}
+	}
+}
+
+// pruneDeniedRelays removes banned upstreams (in practice the relay's own
+// hostname) from the broadcast manager, so discovery cannot make the relay
+// publish to itself or health-check itself.
+func pruneDeniedRelays(denylist *Denylist, mgr *manager.Manager) {
+	if denylist.Empty() || mgr == nil {
+		return
+	}
+	removed := 0
+	for _, relayURL := range mgr.GetAllRelays() {
+		if denylist.Match(relayURL) {
+			mgr.RemoveRelay(relayURL)
+			removed++
+		}
+	}
+	if removed > 0 {
+		logging.Warn("Upstream denylist: removed %d self/banned relay(s) from the broadcast manager", removed)
 	}
 }
 

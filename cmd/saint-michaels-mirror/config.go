@@ -52,6 +52,10 @@ type Config struct {
 	BroadcastSeedRelays      []string
 	BroadcastMandatoryRelays []string
 	BroadcastRefreshInterval time.Duration
+
+	// UpstreamDenylist lists relay hosts/URLs that must never be dialed. The
+	// relay's own public hostname (RELAY_SERVICE_URL) is added automatically.
+	UpstreamDenylist []string
 }
 
 // LoadConfig reads environment variables and flags. Flags override env values.
@@ -101,6 +105,7 @@ func LoadConfig() *Config {
 	broadcastCacheTTL := flag.String("broadcast-cache-ttl", getEnvOr("BROADCAST_CACHE_TTL", "1h"), "cache TTL for broadcast events (env: BROADCAST_CACHE_TTL)")
 	broadcastSeedRelays := flag.String("broadcast-seed-relays", os.Getenv("BROADCAST_SEED_RELAYS"), "comma-separated list of seed relays for broadcast discovery (env: BROADCAST_SEED_RELAYS)")
 	broadcastMandatoryRelays := flag.String("broadcast-mandatory-relays", os.Getenv("BROADCAST_MANDATORY_RELAYS"), "comma-separated list of mandatory relays for broadcasting (env: BROADCAST_MANDATORY_RELAYS)")
+	upstreamDenylist := flag.String("upstream-denylist", os.Getenv("UPSTREAM_DENYLIST"), "comma-separated relay hosts/URLs that must never be dialed, e.g. the relay's own hostname (env: UPSTREAM_DENYLIST)")
 
 	// Parse refresh interval
 	envRefreshInterval := getEnvOr("BROADCAST_REFRESH_INTERVAL", "24h")
@@ -129,6 +134,11 @@ func LoadConfig() *Config {
 		broadcastMandatoryList = strings.Split(*broadcastMandatoryRelays, ",")
 	}
 
+	denyList := []string{}
+	if *upstreamDenylist != "" {
+		denyList = strings.Split(*upstreamDenylist, ",")
+	}
+
 	cfg := &Config{
 		Addr:         *addr,
 		QueryRemotes: qry,
@@ -150,6 +160,8 @@ func LoadConfig() *Config {
 		BroadcastSeedRelays:      broadcastSeedList,
 		BroadcastMandatoryRelays: broadcastMandatoryList,
 		BroadcastRefreshInterval: *broadcastRefreshInterval,
+
+		UpstreamDenylist: denyList,
 	}
 
 	return cfg
