@@ -329,7 +329,7 @@ func main() {
 	)
 
 	// Strict connection rate limiting to prevent bot abuse
-	connectionRateLimiter := policies.ConnectionRateLimiter(1, time.Minute, 10)
+	connectionRateLimiter := policies.ConnectionRateLimiter(2, time.Minute, 10)
 	r.RejectConnection = append(r.RejectConnection,
 		// Strict connection limiting to prevent bot abuse
 		func(req *http.Request) (reject bool) {
