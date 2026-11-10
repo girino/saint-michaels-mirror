@@ -248,10 +248,21 @@ func collectHealthSnapshot(rs, mm, bs, app statsProvider) healthSnapshot {
 				if n := jsonInt(goroutinesVal, "count"); n > 0 {
 					snap.GoroutineCount = int(n)
 				}
-				snap.MainHealthState = worseHealth(snap.MainHealthState, snap.GoroutineHealthState)
 			}
 		}
 	}
+
+	// Evaluate the live goroutine count in the handler as well. The app stats
+	// provider can be missing or slow, and a goroutine leak must never be
+	// masked by a healthy-looking relay/mirror/broadcast state: RED here is
+	// what makes the healthcheck fail and autoheal restart the container.
+	liveGoroutineState := getGoroutineHealthState(snap.GoroutineCount)
+	if snap.GoroutineHealthState == "" {
+		snap.GoroutineHealthState = liveGoroutineState
+	} else {
+		snap.GoroutineHealthState = worseHealth(snap.GoroutineHealthState, liveGoroutineState)
+	}
+	snap.MainHealthState = worseHealth(snap.MainHealthState, snap.GoroutineHealthState)
 
 	if snap.TimedOut {
 		snap.MainHealthState = HealthRed
@@ -277,6 +288,8 @@ func (s healthSnapshot) toJSON(service, version string) *jsonlib.JsonObject {
 	health.Set("broadcast_health_state", jsonlib.NewJsonValue(s.BroadcastHealthState))
 	health.Set("goroutine_health_state", jsonlib.NewJsonValue(s.GoroutineHealthState))
 	health.Set("goroutine_count", jsonlib.NewJsonValue(s.GoroutineCount))
+	health.Set("goroutine_warn_threshold", jsonlib.NewJsonValue(GoroutineYellowThreshold))
+	health.Set("goroutine_fail_threshold", jsonlib.NewJsonValue(GoroutineRedThreshold))
 	health.Set("consecutive_publish_failures", jsonlib.NewJsonValue(s.ConsecutivePublishFailures))
 	health.Set("consecutive_query_failures", jsonlib.NewJsonValue(s.ConsecutiveQueryFailures))
 	health.Set("consecutive_mirror_failures", jsonlib.NewJsonValue(s.ConsecutiveMirrorFailures))

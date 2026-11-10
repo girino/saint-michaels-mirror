@@ -34,11 +34,51 @@ import (
 	nip19 "github.com/nbd-wtf/go-nostr/nip19"
 )
 
-// Goroutine health thresholds
-const (
-	GoroutineYellowThreshold = 30000  // 30k goroutines = yellow health
-	GoroutineRedThreshold    = 100000 // 100k goroutines = red health
+// Goroutine health thresholds.
+//
+//	>= GoroutineYellowThreshold -> YELLOW (status=degraded, HTTP 200)
+//	>= GoroutineRedThreshold    -> RED    (status=unhealthy, HTTP 503)
+//
+// A RED health state makes the Docker healthcheck fail, which is what lets
+// autoheal restart the container before a goroutine leak suffocates the host.
+// The defaults can be tuned at startup with GOROUTINE_WARN_THRESHOLD and
+// GOROUTINE_FAIL_THRESHOLD (see applyGoroutineThresholdEnv).
+var (
+	GoroutineYellowThreshold = 30000 // 30k goroutines = degraded
+	GoroutineRedThreshold    = 50000 // 50k goroutines = unhealthy -> restart
 )
+
+// applyGoroutineThresholdEnv overrides the goroutine thresholds from the
+// environment. Invalid values are ignored and RED is always kept above WARN so
+// a bad configuration cannot make the unhealthy state unreachable.
+func applyGoroutineThresholdEnv() {
+	if v := positiveIntEnv("GOROUTINE_WARN_THRESHOLD"); v > 0 {
+		GoroutineYellowThreshold = v
+	}
+	if v := positiveIntEnv("GOROUTINE_FAIL_THRESHOLD"); v > 0 {
+		GoroutineRedThreshold = v
+	}
+	if GoroutineRedThreshold <= GoroutineYellowThreshold {
+		logging.Warn("GOROUTINE_FAIL_THRESHOLD (%d) <= GOROUTINE_WARN_THRESHOLD (%d); using %d",
+			GoroutineRedThreshold, GoroutineYellowThreshold, GoroutineYellowThreshold+1)
+		GoroutineRedThreshold = GoroutineYellowThreshold + 1
+	}
+}
+
+// positiveIntEnv parses a positive integer from the environment, returning 0
+// when the variable is unset or invalid.
+func positiveIntEnv(key string) int {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n <= 0 {
+		logging.Warn("ignoring invalid %s=%q", key, raw)
+		return 0
+	}
+	return n
+}
 
 // Health state constants
 const (
@@ -127,6 +167,10 @@ func main() {
 	//   GOROUTINE_DUMP=off           : never (production)
 	//   GOROUTINE_DUMP=on            : always
 	SetGoroutineDumpMode(os.Getenv("GOROUTINE_DUMP"))
+
+	// Operational goroutine limits: YELLOW warns, RED fails the healthcheck and
+	// triggers an autoheal restart.
+	applyGoroutineThresholdEnv()
 
 	// create a basic khatru relay instance
 	r := khatru.NewRelay()

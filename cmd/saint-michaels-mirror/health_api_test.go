@@ -260,3 +260,104 @@ func TestDumpAllGoroutinesDisabled(t *testing.T) {
 		t.Fatal("goroutine dump should be disabled")
 	}
 }
+
+func TestGetGoroutineHealthState(t *testing.T) {
+	oldWarn, oldFail := GoroutineYellowThreshold, GoroutineRedThreshold
+	defer func() { GoroutineYellowThreshold, GoroutineRedThreshold = oldWarn, oldFail }()
+	GoroutineYellowThreshold, GoroutineRedThreshold = 100, 200
+
+	tests := []struct {
+		count int
+		want  string
+	}{
+		{0, HealthGreen},
+		{99, HealthGreen},
+		{100, HealthYellow},
+		{199, HealthYellow},
+		{200, HealthRed},
+		{1000000, HealthRed},
+	}
+	for _, tt := range tests {
+		if got := getGoroutineHealthState(tt.count); got != tt.want {
+			t.Errorf("getGoroutineHealthState(%d) = %s, want %s", tt.count, got, tt.want)
+		}
+	}
+}
+
+func TestApplyGoroutineThresholdEnv(t *testing.T) {
+	oldWarn, oldFail := GoroutineYellowThreshold, GoroutineRedThreshold
+	defer func() { GoroutineYellowThreshold, GoroutineRedThreshold = oldWarn, oldFail }()
+
+	GoroutineYellowThreshold, GoroutineRedThreshold = 30000, 50000
+
+	t.Setenv("GOROUTINE_WARN_THRESHOLD", "1234")
+	t.Setenv("GOROUTINE_FAIL_THRESHOLD", "4321")
+	applyGoroutineThresholdEnv()
+	if GoroutineYellowThreshold != 1234 || GoroutineRedThreshold != 4321 {
+		t.Fatalf("thresholds = %d/%d, want 1234/4321", GoroutineYellowThreshold, GoroutineRedThreshold)
+	}
+
+	// Invalid or non-positive values must be ignored, keeping the previous ones.
+	t.Setenv("GOROUTINE_WARN_THRESHOLD", "abc")
+	t.Setenv("GOROUTINE_FAIL_THRESHOLD", "-5")
+	applyGoroutineThresholdEnv()
+	if GoroutineYellowThreshold != 1234 || GoroutineRedThreshold != 4321 {
+		t.Fatalf("invalid env changed thresholds to %d/%d, want 1234/4321", GoroutineYellowThreshold, GoroutineRedThreshold)
+	}
+
+	// FAIL must always stay above WARN, otherwise RED would be unreachable.
+	t.Setenv("GOROUTINE_WARN_THRESHOLD", "900")
+	t.Setenv("GOROUTINE_FAIL_THRESHOLD", "900")
+	applyGoroutineThresholdEnv()
+	if GoroutineRedThreshold <= GoroutineYellowThreshold {
+		t.Fatalf("FAIL (%d) must be greater than WARN (%d)", GoroutineRedThreshold, GoroutineYellowThreshold)
+	}
+}
+
+// TestCollectHealthSnapshotGoroutineOverloadIsRed guarantees that a goroutine
+// count above the fail threshold makes the health snapshot RED/503 even when
+// every other component reports GREEN, and even when the app stats provider is
+// absent (the live runtime count is evaluated by the handler itself).
+func TestCollectHealthSnapshotGoroutineOverloadIsRed(t *testing.T) {
+	oldWarn, oldFail := GoroutineYellowThreshold, GoroutineRedThreshold
+	defer func() { GoroutineYellowThreshold, GoroutineRedThreshold = oldWarn, oldFail }()
+	GoroutineYellowThreshold, GoroutineRedThreshold = 1, 1
+
+	rs := &fakeProvider{obj: obj("main_health_state", HealthGreen, "query_health_state", HealthGreen)}
+	mm := &fakeProvider{obj: obj("mirror_health_state", HealthGreen)}
+	bs := &fakeProvider{obj: obj("health_state", HealthGreen)}
+
+	snap := collectHealthSnapshot(rs, mm, bs, nil)
+	if snap.GoroutineHealthState != HealthRed {
+		t.Fatalf("goroutine state = %s, want RED", snap.GoroutineHealthState)
+	}
+	if snap.MainHealthState != HealthRed {
+		t.Fatalf("main state = %s, want RED", snap.MainHealthState)
+	}
+	if snap.HTTPStatus != http.StatusServiceUnavailable {
+		t.Fatalf("http status = %d, want 503", snap.HTTPStatus)
+	}
+}
+
+// TestCollectHealthSnapshotGoroutineOverloadWithAppProvider covers the path
+// where the app stats provider is present but reports a stale GREEN state.
+func TestCollectHealthSnapshotGoroutineOverloadWithAppProvider(t *testing.T) {
+	oldWarn, oldFail := GoroutineYellowThreshold, GoroutineRedThreshold
+	defer func() { GoroutineYellowThreshold, GoroutineRedThreshold = oldWarn, oldFail }()
+	GoroutineYellowThreshold, GoroutineRedThreshold = 1, 1
+
+	app := &fakeProvider{obj: func() *jsonlib.JsonObject {
+		o := jsonlib.NewJsonObject()
+		g := jsonlib.NewJsonObject()
+		g.Set("count", jsonlib.NewJsonValue(10))
+		g.Set("health_state", jsonlib.NewJsonValue(HealthGreen))
+		o.Set("goroutines", g)
+		return o
+	}()}
+
+	snap := collectHealthSnapshot(nil, nil, nil, app)
+	if snap.MainHealthState != HealthRed || snap.HTTPStatus != http.StatusServiceUnavailable {
+		t.Fatalf("stale GREEN app stats must not mask RED: state=%s status=%d",
+			snap.MainHealthState, snap.HTTPStatus)
+	}
+}
