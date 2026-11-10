@@ -3,17 +3,18 @@ version: '3.8'
 # Canonical compose template (tracked in git).
 # Copy this file for local/production edits — docker-compose.yml is gitignored:
 #   cp docker-compose.prod.yml docker-compose.yml
-# Then edit docker-compose.yml (ports, binds, image tags, extra services).
+# Then edit docker-compose.yml (ports, binds, extra services).
 #
 # Notes:
-# - Set PROD_IMAGE to your registry image for a specific version (e.g. ghcr.io/girino/saint-michaels-mirror:1.0.0-rc2)
-# - Defaults to 'latest' tag if PROD_IMAGE is not set
+# - The relay image is built locally from this repository. There is deliberately
+#   no `image:` name pointing at a registry: with `build:` and no `image:`,
+#   Compose always builds (or reuses the local image) and never tries to pull.
 # - The Tor service provides a hidden service for the relay
 # - The tor_data volume persists onion keys so the .onion address remains stable across restarts.
 
 services:
   relay:
-    image: "${PROD_IMAGE:-ghcr.io/girino/saint-michaels-mirror/saint-michaels-mirror:latest}"
+    build: .
     restart: unless-stopped
     env_file: .env
     environment:
