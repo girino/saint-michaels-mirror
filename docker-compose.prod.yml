@@ -41,7 +41,7 @@ services:
       # because it is served by this same VPS, so dialing it loops back through
       # Cloudflare into our own nginx. Discovery can re-add these hostnames, so
       # the app also prunes them from the broadcast manager after every refresh.
-      UPSTREAM_DENYLIST: "wot.girino.org,espelho.girino.org"
+      UPSTREAM_DENYLIST: "wot.girino.org,espelho.girino.org,198.46.160.216,10.77.240.10"
     ports:
       - "${COMPOSE_RELAY_PORT:-3337}:3337" # host:container
     labels:
