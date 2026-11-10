@@ -36,12 +36,14 @@ services:
       # relay and stays. The stale values in .env are overridden here.
       QUERY_REMOTES: "wss://nostr.girino.org,wss://relay.damus.io,wss://relay.primal.net,wss://pyramid.fiatjaf.com/,wss://theforest.nostr1.com/,wss://relays.land/spatianostra,wss://noornode.nostr1.com/,wss://primus.nostr1.com/,wss://relay.nostr.moe/,wss://news.utxo.one/,wss://relay.stream/,wss://nos.lol/,wss://nostr.mom/,wss://nostr.wine/,wss://yabu.me"
       BROADCAST_MANDATORY_RELAYS: "wss://nostr.girino.org,wss://haven.girino.org/outbox,wss://haven.girino.org/inbox,wss://haven.girino.org/chat,wss://haven.girino.org/private,wss://relay.primal.net,wss://nos.lol"
-      # Upstreams the relay must never dial. The relay's own public hostname
-      # (RELAY_SERVICE_URL) is added automatically; wot.girino.org is listed
-      # because it is served by this same VPS, so dialing it loops back through
-      # Cloudflare into our own nginx. Discovery can re-add these hostnames, so
-      # the app also prunes them from the broadcast manager after every refresh.
-      UPSTREAM_DENYLIST: "wot.girino.org,espelho.girino.org,198.46.160.216,10.77.240.10"
+      # Upstreams the relay must never dial, listed explicitly. Every URL served
+      # by this VPS is here: the two nginx vhosts (wot, espelho), the extra name
+      # that falls through to the default 443 server (graphs), the host IPs
+      # (public eth0 and the crowdsec/wireguard address) and the Tor onion
+      # services running here. Dialing any of them loops back to this relay.
+      # Discovery can re-add these hostnames, so the app also prunes them from
+      # the broadcast manager after every refresh.
+      UPSTREAM_DENYLIST: "wot.girino.org,espelho.girino.org,graphs.girino.org,198.46.160.216,10.77.240.10,psmzrj6c6i2zkm2adrixolw2qzpj52vxp26scs3dkpeizl6gbg2uszad.onion,qb77tfmvxmk6nnapzkssbstkyq2nw3sayovetlfkjykkytkd7fna4uqd.onion"
     ports:
       - "${COMPOSE_RELAY_PORT:-3337}:3337" # host:container
     labels:
