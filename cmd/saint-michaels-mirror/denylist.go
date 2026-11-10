@@ -8,6 +8,7 @@ package main
 import (
 	"net"
 	"net/url"
+	"os"
 	"sort"
 	"strings"
 
@@ -72,6 +73,42 @@ func (d *Denylist) AddSelf(serviceURL string) {
 	d.add(serviceURL)
 }
 
+// AddLocalIPs adds every address assigned to this machine, plus loopback and
+// the local hostname, so a relay URL that points at the host by IP or by its
+// own name is denied as well (e.g. ws://127.0.0.1:3337, wss://203.0.113.7).
+func (d *Denylist) AddLocalIPs() {
+	for _, raw := range []string{"127.0.0.1", "::1", "0.0.0.0", "::"} {
+		d.addIP(net.ParseIP(raw))
+	}
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		logging.Warn("upstream denylist: could not list local interfaces: %v", err)
+	} else {
+		for _, addr := range addrs {
+			switch v := addr.(type) {
+			case *net.IPNet:
+				d.addIP(v.IP)
+			case *net.IPAddr:
+				d.addIP(v.IP)
+			}
+		}
+	}
+	if host, err := os.Hostname(); err == nil {
+		d.add(host)
+	}
+}
+
+// addIP stores an address in canonical form so IPv4 and IPv6 spellings match.
+func (d *Denylist) addIP(ip net.IP) {
+	if ip == nil {
+		return
+	}
+	if v4 := ip.To4(); v4 != nil {
+		ip = v4
+	}
+	d.add(ip.String())
+}
+
 // Match reports whether rawURL points at a denied upstream.
 func (d *Denylist) Match(rawURL string) bool {
 	if d == nil || len(d.hosts) == 0 && len(d.prefixes) == 0 {
@@ -81,7 +118,15 @@ func (d *Denylist) Match(rawURL string) bool {
 	if err != nil {
 		return false
 	}
-	if host := strings.ToLower(u.Hostname()); host != "" {
+	host := strings.ToLower(u.Hostname())
+	if ip := net.ParseIP(host); ip != nil {
+		if v4 := ip.To4(); v4 != nil {
+			host = v4.String()
+		} else {
+			host = ip.String()
+		}
+	}
+	if host != "" {
 		if _, denied := d.hosts[host]; denied {
 			return true
 		}

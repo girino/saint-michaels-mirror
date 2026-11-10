@@ -6,6 +6,8 @@
 package main
 
 import (
+	"net"
+	"os"
 	"testing"
 
 	"github.com/girino/nostr-lib/broadcast/manager"
@@ -80,6 +82,56 @@ func TestDenylistEmpty(t *testing.T) {
 	}
 	if got := d.Len(); got != 1 {
 		t.Fatalf("Len() = %d, want 1", got)
+	}
+}
+
+func TestDenylistAddLocalIPs(t *testing.T) {
+	d := NewDenylist()
+	d.AddLocalIPs()
+
+	for _, u := range []string{
+		"ws://127.0.0.1:3337",
+		"ws://[::1]:3337",
+		"ws://0.0.0.0:3337",
+		"ws://[::]:3337",
+		"ws://[0:0:0:0:0:0:0:1]:3337", // expanded IPv6 loopback
+	} {
+		if !d.Match(u) {
+			t.Errorf("Match(%q) = false, want true", u)
+		}
+	}
+
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		t.Fatalf("InterfaceAddrs: %v", err)
+	}
+	checked := 0
+	for _, a := range addrs {
+		ipnet, ok := a.(*net.IPNet)
+		if !ok || ipnet.IP.IsLoopback() {
+			continue
+		}
+		u := "ws://" + net.JoinHostPort(ipnet.IP.String(), "3337")
+		if !d.Match(u) {
+			t.Errorf("local address %s is not denied", ipnet.IP)
+		}
+		checked++
+	}
+	if checked == 0 {
+		t.Skip("no non-loopback interface address available")
+	}
+
+	if host, err := os.Hostname(); err == nil && host != "" {
+		if !d.Match("ws://" + host + ":3337") {
+			t.Errorf("local hostname %q is not denied", host)
+		}
+	}
+
+	if d.Match("wss://relay.damus.io") {
+		t.Fatal("external relay must not be denied")
+	}
+	if d.Match("ws://203.0.113.7:3337") {
+		t.Fatal("a foreign IP must not be denied")
 	}
 }
 

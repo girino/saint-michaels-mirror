@@ -178,6 +178,7 @@ func main() {
 	// to the dynamically discovered relays (see pruneDeniedRelays).
 	denylist := NewDenylist(cfg.UpstreamDenylist...)
 	denylist.AddSelf(cfg.RelayServiceURL)
+	denylist.AddLocalIPs()
 	if !denylist.Empty() {
 		logging.Info("Upstream denylist active: %s", denylist.String())
 		cfg.QueryRemotes = filterAndLog(denylist, "QUERY_REMOTES", cfg.QueryRemotes)
