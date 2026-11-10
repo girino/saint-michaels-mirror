@@ -63,6 +63,8 @@ github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMo
 github.com/fsnotify/fsnotify v1.4.9/go.mod h1:znqG4EE+3YCdAaPaxE2ZRY/06pZUdp0tY4IgpuI1SZQ=
 github.com/girino/nostr-lib v0.0.0-20260913230849-1c87b9904f51 h1:5aKxxHav++vBlaVCuF5JugF6ngmScYTuVSuCodY+E1U=
 github.com/girino/nostr-lib v0.0.0-20260913230849-1c87b9904f51/go.mod h1:V8V7tszCLpdh8IlgTCe0pc0tcF3bssIAR0iDVz4KR6w=
+github.com/girino/nostr-lib v0.0.0-20261110122010-42a5a1d59c18 h1:JZJm6tgmT+3JPelHH5HzbnaIcavem5N2u9ZJDHMyrDU=
+github.com/girino/nostr-lib v0.0.0-20261110122010-42a5a1d59c18/go.mod h1:V8V7tszCLpdh8IlgTCe0pc0tcF3bssIAR0iDVz4KR6w=
 github.com/golang/protobuf v1.2.0/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5yJMmIC1U=
 github.com/golang/protobuf v1.4.0-rc.1/go.mod h1:ceaxUfeHdC40wWswd/P6IGgMaK3YpKi5j83Wpe3EHw8=
 github.com/golang/protobuf v1.4.0-rc.1.0.20200221234624-67d41d38c208/go.mod h1:xKAWHe0F5eneWXFV3EuXVDTCmh+JuBKY0li0aMyXATA=
